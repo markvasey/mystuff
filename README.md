@@ -4,10 +4,10 @@
 
 # Git workflow
 
-`git status`
-`git add .`\
-`git commit -m "changes"`\
-`git push orgin main`
+1. `git status`\
+2. `git add .`\
+3. `git commit -m "changes"`\
+4. `git push orgin main`
 
 # Postgres
 
