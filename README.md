@@ -4,15 +4,15 @@
 
 # Git workflow
 
-'git status'
-'git add .'\
-'git commit -m "changes"'\
-'git push orgin main'
+`git status`
+`git add .`\
+`git commit -m "changes"`\
+`git push orgin main`
 
 # Postgres
 
 How to start postgres service
 
-'sudo systemctl start postgresql'
+`sudo systemctl start postgresql`
 
 
