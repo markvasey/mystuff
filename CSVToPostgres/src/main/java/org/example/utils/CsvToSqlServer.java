@@ -179,11 +179,14 @@ public class CsvToSqlServer {
     private static String GetStrippedColumn(String column) {
         String strippedColumnName = column.replaceAll(" ", "");
         strippedColumnName = strippedColumnName.replaceAll("-","");
+        strippedColumnName = strippedColumnName.replaceAll("\\.","");
         strippedColumnName = strippedColumnName.replaceAll("\\+","");
         strippedColumnName = strippedColumnName.replaceAll("\\(","");
         strippedColumnName = strippedColumnName.replaceAll("\\)","");
         strippedColumnName = strippedColumnName.replaceAll("�","");
         strippedColumnName = strippedColumnName.replaceAll("/","");
+        strippedColumnName = strippedColumnName.replaceAll("\\?","");
+        strippedColumnName = strippedColumnName.replaceAll("\\+","");
 
         return strippedColumnName;
     }
