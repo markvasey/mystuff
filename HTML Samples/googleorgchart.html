@@ -1,0 +1,39 @@
+<html>
+  <!-- https://developers.google.com/chart/interactive/docs/gallery/orgchart -->
+  <head>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {packages:["orgchart"]});
+      google.charts.setOnLoadCallback(drawChart);
+
+      function drawChart() {
+        var data = new google.visualization.DataTable();
+        data.addColumn('string', 'Name');
+        data.addColumn('string', 'Manager');
+
+        // For each orgchart box, provide the name, manager, and tooltip to show.
+        data.addRows([
+          [{'v':'1', 'f':'<div style="color:black; font-style:normal"><b>Big Team</b><BR><em>Mike Wills (D13)</em><BR>Program Manager</div>'},""],
+          [{'v':'2', 'f':'<div style="color:black; font-style:italic"><b>Team 1</b><br>Jim Broads (D12)<BR>Developer</div>'},'1'],
+          [{'v':'3', 'f':'<div style="color:black; font-style:italic"><b>Team 2</b><br>Alice Capper (C11)<BR>Developer</div>'},'1'],
+          [{'v':'4', 'f':'<div style="color:black; font-style:italic"><b>Team 3</b><br>Sarah Fard (D12)<BR>Developer</div>'},'1'],
+          [{'v':'5', 'f':'<div style="color:black; font-style:italic"><b>Team 4</b><br>Sally Jimson (C11)<BR>Developer</div>'},'1'],
+          [{'v':'6', 'f':'<div style="color:black; font-style:italic"><b>Team 5</b><br>Gaurav Gupta (C11)<BR>Developer</div>'},'1'],
+          [{'v':'7', 'f':'<div style="color:black; font-style:italic">Bob Bells (C10)<BR>BA</div>'},'2'],
+          [{'v':'8', 'f':'<div style="color:black; font-style:italic"><b>Team 5_1</b><br>Carol Franks (B9)<BR>QA</div>'},'7'],
+          [{'v':'9', 'f':'<div style="color:black; font-style:italic">Freda Jones (Graduate)<BR>QA</div>'},'8'],
+          [{'v':'10', 'f':'<div style="color:black; font-style:italic">Frederick Josh (B8)<BR>QA</div>'},'8'],
+          [{'v':'11', 'f':'<div style="color:black; font-style:italic">Flavio Bontelly (B8)<BR>QA</div>'},'8'],
+        ]);
+
+        // Create the chart.
+        var chart = new google.visualization.OrgChart(document.getElementById('chart_div'));
+        // Draw the chart, setting the allowHtml option to true for the tooltips.
+        chart.draw(data, {'allowHtml':true, 'allowCollapse':true, 'size':'medium','compactRows':false});
+      }
+   </script>
+    </head>
+  <body>
+    <div id="chart_div"></div>
+  </body>
+</html>
