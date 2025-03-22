@@ -11,10 +11,14 @@ import static org.junit.Assert.fail;
 
 public class TestCsvToSqlServer {
     @Test
-    public void TestCsvToSqlServer_ImportCSVFileToNewTable_HCM012StaffList() throws SQLException, IOException {
+    public void TestCsvToSqlServer_ImportCSVFileToNewTable_Sample() throws SQLException, IOException {
         CsvToSqlServer.ImportCSVFileToNewTable("/home/markvasey/Dropbox/GitHub/mystuff/Data/sample.csv", "Sample");
     }
 
+    @Test
+    public void TestCsvToSqlServer_ImportCSVFileToNewTable_TeamPeople() throws SQLException, IOException {
+        CsvToSqlServer.ImportCSVFileToNewTable("/home/markvasey/Dropbox/GitHub/mystuff/Data/TeamPeople.csv", "TeamPeople");
+    }
 
     @Test
     public void TestCsvToSqlServer_insertRow () {

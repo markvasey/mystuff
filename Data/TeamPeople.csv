@@ -1,0 +1,16 @@
+PersonId,Name,ManagerId,Manager,Role,Grade
+1,Joe Smith,,,Developer,13
+2,Jacqueline Ross,1,Joe Smith,Developer,12
+3,Freda Jarmin,1,Joe Smith,Developer,12
+4,Jeremy French,1,Joe Smith,Developer,12
+5,Bill Ryley,1,Joe Smith,Program Manager,12
+6,Ashmarta Berry,2,Jacqueline Ross,Developer,11
+7,Wojicech Freil,2,Jacqueline Ross,Developer,11
+8,Zygmunt Jerry,2,Jacqueline Ross,Developer,10
+9,Jane Ashmarti,3,Freda Jarmin,Developer,10
+10,Jill French,3,Freda Jarmin,Developer,9
+11,Sanjay Gupta,3,Freda Jarmin,Developer,9
+12,Deepak Ashmart,4,Jeremy French,QA,8
+13,William Quaid,4,Jeremy French,QA,8
+14,Jeremy Wylder,4,Jeremy French,QA,7
+15,Jish Jagger,7,Wojicech Freil,QA,6
