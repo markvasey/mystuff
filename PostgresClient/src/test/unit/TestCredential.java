@@ -1,4 +1,4 @@
-package org;
+package unit;
 
 import org.junit.Test;
 

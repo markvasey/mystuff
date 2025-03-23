@@ -11,10 +11,11 @@ public class Main {
         System.out.println("PostgresClient started");
 
         try (Connection connection = DBConnectionHelper.GetDBConnection()) {
-            System.out.println(connection.getMetaData().getDatabaseProductVersion());
+            System.out.println("Connected: " + connection.getMetaData().getDatabaseProductVersion());
         } catch(SQLException e) {
             System.out.println("Error connecting to database: " + e);
         }
 
+        System.out.println("PostgresClient finished");
     }
 }
