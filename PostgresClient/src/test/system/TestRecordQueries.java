@@ -13,7 +13,7 @@ public class TestRecordQueries {
 
 
     @Test
-    public void SLQuery_GetPeople() {
+    public void TestRecordQueriesGetPeople() {
         List<Person> people = RecordQueries.GetPeople();
         Assertions.assertEquals(15, people.size());
 
@@ -32,4 +32,13 @@ public class TestRecordQueries {
         Assertions.assertEquals("Joe Smith",person.manager());
         Assertions.assertEquals("Developer",person.role());
         Assertions.assertEquals(12,person.grade());
-    }}
+    }
+
+    @Test
+    public void TestRecordQueries_SerialisePeopleAsJSONArray() {
+        List<Person> people = RecordQueries.GetPeople();
+        Assertions.assertEquals(15, people.size());
+        Assertions.assertEquals("[2, \"Jacqueline Ross\", 1, \"Joe Smith\", \"Developer\", 12]",
+                people.get(1).toJavaScriptArrayString());
+    }
+}

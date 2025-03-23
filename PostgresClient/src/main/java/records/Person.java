@@ -7,4 +7,16 @@ public record Person(int personId,
                      String role,
                      int grade
 ) {
+    public String toJavaScriptArrayString() {
+        return "[" +
+                personId + ", " +
+                "\"" + name + "\", " +
+                managerId + ", " +
+                "\"" + manager + "\", " +
+                "\"" + role + "\", " +
+                grade +
+                "]";
+    }
+
+
 }
