@@ -1,0 +1,13 @@
+# Runtime files
+1Password.opvault/
+
+# Maven build artifacts
+target/
+*.class
+
+# IDE files
+.idea/
+*.iml
+.settings/
+.project
+.classpath
