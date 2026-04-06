@@ -116,9 +116,9 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                 byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
                                 ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
                                 String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
-                                String url = overview.getUrl() != null ? overview.getUrl() : "No URL";
+                                String urlText = overview.getUrl() == null ? "" : ", URL: " + overview.getUrl();
 
-                                System.out.println("Title: " + title + ", URL: " + url);
+                                System.out.println("Title: " + title + urlText);
                                 countTitles++;
 
                                 // 2. Decrypt Details

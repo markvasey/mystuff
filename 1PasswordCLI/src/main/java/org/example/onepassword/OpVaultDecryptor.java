@@ -16,6 +16,8 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 public class OpVaultDecryptor {
+    //https://support.1password.com/cs/opvault-design/
+
     public static final String OP_DATA_MAGIC = "opdata01";
 
     /**
