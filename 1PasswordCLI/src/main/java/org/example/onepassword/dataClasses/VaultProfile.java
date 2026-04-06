@@ -1,4 +1,4 @@
-package org.example.onepassword;
+package org.example.onepassword.dataClasses;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

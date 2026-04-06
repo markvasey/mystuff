@@ -1,5 +1,7 @@
 package org.example.onepassword;
 
+import org.example.onepassword.utils.ByteUtils;
+
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKeyFactory;
@@ -52,7 +54,7 @@ public class OpVaultDecryptor {
         buffer.get(magic);
         String magicStr = new String(magic, StandardCharsets.US_ASCII);
         if (!magicStr.equals(OP_DATA_MAGIC)) {
-            throw new Exception("decryptOpData - Invalid magic: " + bytesToHex(magic) + " (" + magicStr + ")");
+            throw new Exception("decryptOpData - Invalid magic: " + ByteUtils.bytesToHex(magic) + " (" + magicStr + ")");
         }
 
         long plainLen = buffer.getLong();
@@ -91,17 +93,6 @@ public class OpVaultDecryptor {
         return Arrays.copyOfRange(decrypted, decryptedLen - (int)plainLen, decryptedLen);
     }
 
-    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
-    public static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
-
     public static String decryptItems(byte[] itemKeyData, byte[] detailData, byte[] vaultMasterKey) throws Exception {
         if (itemKeyData.length < 48) {
             throw new Exception("decryptItems - itemKeyData too short: " + itemKeyData.length);
@@ -109,35 +100,6 @@ public class OpVaultDecryptor {
 
         byte[] vaultEncKey = Arrays.copyOfRange(vaultMasterKey, 0, 32);
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
-
-        /*
-            https://support.1password.com/cs/opvault-design/
-
-            Data: 64 bytes
-                typedef struct {
-                  uint8_t crypto_key[32];
-                  uint8_t mac_key[32];
-                };
-            IV: The data before the MAC is the AES-CBC encrypted item keys using unique random 16-byte IV. - 16 bytes
-            MAC: The last 32 bytes comprise the HMAC-SHA256 of the IV and the encrypted data. The MAC is computed with the master MAC key. - 32 bytes
-         */
-        /*
-            https://darthnull.org/1pass-local-vaults/
-
-            The key_data structure includes four components:
-
-                Initialization Vector (IV) (16 bytes)
-                Item Encryption Key (32 bytes)
-                Item HMAC Key (32 bytes)
-                HMAC Tag (32 bytes)
-            First, compute the HMAC tag using the encrypted item keys (encryption + HMAC) as the message, and the Master HMAC Key as key.
-            If that matches the HMAC tag found in the structure, then we know it hasn’t been altered.
-            Now, use the Master AES key to decrypt the item keys, and those keys (AES + HMAC) to decrypt the actual vault item.
-         */
-        /*
-            See also: https://github.com/evantbyrne/1password-opvault/blob/main/opvault/item.go
-                      https://github.com/mickaelperrin/onepassword-local-search
-         */
 
         // itemKeyData structure: [IV (16 bytes)][Ciphertext (N bytes)][HMAC (32 bytes)]
         int hmacOffset = itemKeyData.length - 32;

@@ -1,4 +1,4 @@
-package org.example.onepassword;
+package org.example.onepassword.utils;
 
 import java.util.HashMap;
 

@@ -1,8 +1,7 @@
-package org.example.onepassword;
+package org.example.onepassword.dataClasses;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-import java.util.HashMap;
+import org.example.onepassword.utils.Utils;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VaultItem {
