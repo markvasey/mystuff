@@ -2,9 +2,12 @@ package org.example.onepassword;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.util.HashMap;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VaultItem {
     private String uuid;
+    private String hmac;
     private String o; // encrypted overview
     private String d; // encrypted details
     private String k; // encrypted item key
@@ -42,8 +45,16 @@ public class VaultItem {
         this.k = k;
     }
 
+    public String getHmac() {
+        return hmac;
+    }
+
+    public void setHmac(String hmac) {
+        this.hmac = hmac;
+    }
+
     public String getCategory() {
-        return category;
+        return Utils.getCategoryName(category);
     }
 
     public void setCategory(String category) {

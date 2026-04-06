@@ -8,6 +8,9 @@ public class VaultProfile {
     private int iterations;
     private String masterKey;
     private String overviewKey;
+    private String profileName;
+    private String lastUpdatedBy;
+    private int updatedAt;
 
     public String getSalt() {
         return salt;
@@ -39,5 +42,29 @@ public class VaultProfile {
 
     public void setOverviewKey(String overviewKey) {
         this.overviewKey = overviewKey;
+    }
+
+    public int getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setLastUpdatedBy(String lastUpdatedBy) {
+        this.lastUpdatedBy = lastUpdatedBy;
+    }
+
+    public String getLastUpdatedBy() {
+        return lastUpdatedBy;
+    }
+
+    public void setUpdatedAt(int updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getProfileName() {
+        return profileName;
+    }
+
+    public void setProfileName(String profileName) {
+        this.profileName = profileName;
     }
 }

@@ -70,9 +70,11 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                 return;
             }
             String profileJson = profileJs.substring(startIdx, endIdx + 1);
-            System.out.println("profileJson: " + profileJson);
+            //System.out.println("profileJson: " + profileJson);
 
             VaultProfile profile = objectMapper.readValue(profileJson, VaultProfile.class);
+
+            System.out.println("Profile: " + profile.getProfileName() + ", Updated By: " + profile.getLastUpdatedBy() + ", Updated At: " + profile.getUpdatedAt());
 
             System.out.println("Deriving keys...");
             byte[] masterUnlockKey = OpVaultDecryptor.deriveKeys(password, profile.getSalt(), profile.getIterations());
@@ -111,6 +113,8 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                             try {
                                 if (item.getO() == null) continue;
 
+                                String categoryNameText = item.getCategory() == null ? "" : item.getCategory() + " - ";
+
                                 // 1. Decrypt Overview
                                 byte[] overviewData = Base64.getDecoder().decode(item.getO());
                                 byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
@@ -118,7 +122,7 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                 String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
                                 String urlText = overview.getUrl() == null ? "" : ", URL: " + overview.getUrl();
 
-                                System.out.println("Title: " + title + urlText);
+                                System.out.println(categoryNameText + "Title: " + title + urlText);
                                 countTitles++;
 
                                 // 2. Decrypt Details
