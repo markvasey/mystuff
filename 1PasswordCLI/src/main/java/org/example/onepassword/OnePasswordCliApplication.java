@@ -130,10 +130,50 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                     byte[] encryptedK = Base64.getDecoder().decode(item.getK());
                                     byte[] encryptedD = Base64.getDecoder().decode(item.getD());
 
-                                    String decryptedDetails = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
-                                    System.out.println("Decrypted details: " + decryptedDetails);
+                                    try {
+                                        String decryptedDetailsJson = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
+                                        System.out.println("Decrypted: " + decryptedDetailsJson);
+                                        ItemDetails details = objectMapper.readValue(decryptedDetailsJson, ItemDetails.class);
 
-                                    //ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
+                                        if (details.getFields() != null) {
+                                            for (ItemField field : details.getFields()) {
+                                                String idText = field.getId() == null ? "" : "[Id: " + field.getId() + "] ";
+                                                System.out.print(idText + field.getName() + " = " + field.getValue());
+
+                                                String type = field.getType() == null ? "" : "Type: " + field.getType();
+                                                String designation = field.getDesignation() == null ? "" : "Designation: " + field.getDesignation();
+                                                if (!type.isEmpty() || !designation.isEmpty()) {
+                                                    System.out.print(" (");
+                                                    if (!type.isEmpty()) {
+                                                        System.out.print(type);
+                                                    }
+                                                    if (!type.isEmpty() && !designation.isEmpty()) {
+                                                        System.out.print(", ");
+                                                    }
+                                                    if (!designation.isEmpty()) {
+                                                        System.out.print(designation);
+                                                    }
+                                                    System.out.println(")");
+                                                }
+
+                                                countFields++;
+                                            }
+                                        }
+                                        if (details.getPassword() != null && !details.getPassword().isEmpty()) {
+                                            System.out.println("Password: " + details.getPassword());
+                                        }
+                                        if (details.getNumber() != null && !details.getNumber().isEmpty()) {
+                                            System.out.println("Number: " + details.getNumber());
+                                        }
+                                        if (details.getMembership_no() != null && !details.getMembership_no().isEmpty()) {
+                                            System.out.println("Membership No.: " + details.getMembership_no());
+                                        }
+                                        if (details.getNotesPlain() != null && !details.getNotesPlain().isEmpty()) {
+                                            System.out.println("Notes: " + details.getNotesPlain());
+                                        }
+                                    } catch (Exception e) {
+                                        System.out.println("  Failed to decrypt details: " + e.getMessage());
+                                    }
                                 }
                                 System.out.println();
                             } catch (Exception e) {

@@ -105,6 +105,9 @@ public class OpVaultDecryptor {
     }
 
     public static String decryptItems(byte[] itemKeyData, byte[] detailData, byte[] vaultMasterKey) throws Exception {
+        if (itemKeyData.length < 48) {
+            throw new Exception("decryptItems - itemKeyData too short: " + itemKeyData.length);
+        }
 
         byte[] vaultEncKey = Arrays.copyOfRange(vaultMasterKey, 0, 32);
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
@@ -134,34 +137,34 @@ public class OpVaultDecryptor {
             Now, use the Master AES key to decrypt the item keys, and those keys (AES + HMAC) to decrypt the actual vault item.
          */
 
-        ByteBuffer buffer = ByteBuffer.wrap(itemKeyData).order(ByteOrder.LITTLE_ENDIAN);
-        byte[] iv = new byte[16];
-        buffer.get(iv);
-        byte[] ciphertext = new byte[64];
-        buffer.get(ciphertext);
-        byte[] stored = new byte[32];
-        buffer.get(stored);
+        // itemKeyData structure: [IV (16 bytes)][Ciphertext (N bytes)][HMAC (32 bytes)]
+        int hmacOffset = itemKeyData.length - 32;
+        byte[] iv = Arrays.copyOfRange(itemKeyData, 0, 16);
+        byte[] ciphertext = Arrays.copyOfRange(itemKeyData, 16, hmacOffset);
+        byte[] storedMac = Arrays.copyOfRange(itemKeyData, hmacOffset, itemKeyData.length);
 
+        // 1. Verify HMAC-SHA256 (over IV + Ciphertext)
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
+        mac.update(itemKeyData, 0, hmacOffset);
+        byte[] computedMac = mac.doFinal();
 
-        byte[] computed = mac.doFinal(ciphertext);
-
-        if (!MessageDigest.isEqual(computed, stored)) {
+        if (!MessageDigest.isEqual(computedMac, storedMac)) {
             throw new Exception("decryptItems - HMAC mismatch");
         }
 
-        // 2. Decrypt with vaultKey
-        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding"); // exact 32 bytes, no padding needed
-        cipher.init(Cipher.DECRYPT_MODE,
-                new SecretKeySpec(vaultEncKey, "AES"),
-                new IvParameterSpec(iv));
-        byte[] itemKeyRaw = cipher.doFinal(ciphertext);
+        // 2. Decrypt Ciphertext with vaultEncKey
+        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(vaultEncKey, "AES"), new IvParameterSpec(iv));
+        byte[] itemKey = cipher.doFinal(ciphertext);
 
-        MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
-        byte[] itemKey = sha512.digest(itemKeyRaw);
+        // 3. Decrypt Detail Data with the derived itemKey
+        // itemKey should be 64 bytes (32 enc, 32 mac) for decryptOpData
+        if (itemKey.length < 64) {
+            // If it's shorter, maybe it needs hashing? But OPVault standard says it's 64 bytes.
+            // Some older versions might be different, but let's try the direct 64 bytes first.
+        }
 
-        // Result is a UTF-8 JSON string with the item fields
         return new String(decryptOpData(detailData, itemKey), StandardCharsets.UTF_8);
     }
 }

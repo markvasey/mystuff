@@ -5,14 +5,28 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ItemField {
-    @JsonProperty("n")
+    @JsonProperty("id")
+    private String id;
+
+    @JsonProperty("name")
     private String name;
-    
-    @JsonProperty("v")
+
+    @JsonProperty("value")
     private String value;
     
-    @JsonProperty("t")
-    private String title;
+    @JsonProperty("type")
+    private String type;
+
+    @JsonProperty("designation")
+    private String designation;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public String getName() {
         return name;
@@ -30,11 +44,20 @@ public class ItemField {
         this.value = value;
     }
 
-    public String getTitle() {
-        return title;
+    public String getType() {
+        return type;
     }
 
-    public void setTitle(String title) {
-        this.title = title;
+    public void setType(String title) {
+        this.type = title;
     }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+
 }
