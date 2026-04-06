@@ -134,6 +134,10 @@ public class OpVaultDecryptor {
             If that matches the HMAC tag found in the structure, then we know it hasn’t been altered.
             Now, use the Master AES key to decrypt the item keys, and those keys (AES + HMAC) to decrypt the actual vault item.
          */
+        /*
+            See also: https://github.com/evantbyrne/1password-opvault/blob/main/opvault/item.go
+                      https://github.com/mickaelperrin/onepassword-local-search
+         */
 
         // itemKeyData structure: [IV (16 bytes)][Ciphertext (N bytes)][HMAC (32 bytes)]
         int hmacOffset = itemKeyData.length - 32;
