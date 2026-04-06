@@ -168,26 +168,27 @@ public class OpVaultDecryptor {
         byte[] vaultEncKey = Arrays.copyOfRange(vaultMasterKey, 0, 32);
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
 
-        byte[] stored = new byte[32];
-        byte[] computed = new byte[32];
-        for(int k=0; k<(itemKeyData.length-32); k++) {
-            stored = Arrays.copyOfRange(itemKeyData, k, k+31);
-            for (int i = 0; i < (itemKeyData.length - 1); i++) {
-                for (int j = (itemKeyData.length - i); j > 0; j--) {
-                    //System.out.println("Trying - i=" + i + ", j=" + j);
-                    // 1. Verify HMAC (uses vaultMacKey)
-                    Mac mac = Mac.getInstance("HmacSHA256");
-                    mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
-                    computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, i, i + j));
-                    if (MessageDigest.isEqual(computed, stored)) {
-                        System.out.println("Success - i=" + i + ", j=" + j+ ", k=" + k);
-                        System.out.println("stored: " + HexFormat.of().formatHex(stored));
-                        System.out.println("computed: " + HexFormat.of().formatHex(computed));
-                        break;
-                    }
-                }
-            }
-        }
+        /*
+            Data: 64 bytes
+                typedef struct {
+                  uint8_t crypto_key[32];
+                  uint8_t mac_key[32];
+                };
+            IV: The data before the MAC is the AES-CBC encrypted item keys using unique random 16-byte IV. - 16 bytes
+            MAC: The last 32 bytes comprise the HMAC-SHA256 of the IV and the encrypted data. The MAC is computed with the master MAC key. - 32 bytes
+         */
+
+        System.out.println("itemKeyData length:" + itemKeyData.length);
+
+        byte[] stored = Arrays.copyOfRange(itemKeyData, 80,111);
+        //byte[] stored = Arrays.copyOfRange(itemKeyData, 0,31);
+        //byte[] stored = Arrays.copyOfRange(itemKeyData, 16,47);
+
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
+        byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 0, 79));
+        //byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 32, 111));
+        //byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 48, 111));
 
         if (!MessageDigest.isEqual(computed, stored)) {
             System.out.println("stored: " + HexFormat.of().formatHex(stored));
