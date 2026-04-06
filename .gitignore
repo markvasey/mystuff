@@ -1,5 +1,6 @@
 # Runtime files
 1PasswordPython/
+1password-opvault-main/
 
 # Maven build artifacts
 target/

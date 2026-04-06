@@ -70,6 +70,8 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                 return;
             }
             String profileJson = profileJs.substring(startIdx, endIdx + 1);
+            System.out.println("profileJson: " + profileJson);
+
             VaultProfile profile = objectMapper.readValue(profileJson, VaultProfile.class);
 
             System.out.println("Deriving keys...");
@@ -126,21 +128,31 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                         byte[] itemKeyRaw;
                                         
                                         // Check if k is an opdata01 blob
-                                        if (encryptedK.length >= 8 && new String(encryptedK, 0, 8, StandardCharsets.US_ASCII).equals(OpVaultDecryptor.OP_DATA_MAGIC)) {
+                                        String strTest = new String(encryptedK, 0, 8, StandardCharsets.US_ASCII);
+                                        if (encryptedK.length >= 8 && strTest.equals(OpVaultDecryptor.OP_DATA_MAGIC)) {
+                                            System.out.println("decryptOpData");
                                             itemKeyRaw = OpVaultDecryptor.decryptOpData(encryptedK, vaultMasterKey);
                                         } else {
+                                            System.out.println("decryptAesGcm");
                                             // Fallback for 1Password 7 AES-GCM format
                                             itemKeyRaw = OpVaultDecryptor.decryptAesGcm(encryptedK, vaultMasterKey);
+                                            //itemKeyRaw = OpVaultDecryptor.decryptOpus(encryptedK, vaultMasterKey);
                                         }
                                         
                                         // The result of k decryption must be hashed with SHA-512 to get the 64-byte item key
                                         itemKey = sha512.digest(itemKeyRaw);
+                                        //itemKey = itemKeyRaw;
                                     }
 
                                     byte[] detailsData = Base64.getDecoder().decode(item.getD());
-                                    byte[] decryptedDetails = OpVaultDecryptor.decryptOpData(detailsData, itemKey);
-                                    ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
+                                    //byte[] decryptedDetails = OpVaultDecryptor.decryptOpData(detailsData, itemKey); //=> Tag Mismatch
+                                    byte[] decryptedDetails = OpVaultDecryptor.decryptAesGcm(detailsData, itemKey); //=> Tag Mismatch
+                                    //byte[] decryptedDetails = OpVaultDecryptor.decryptOpus(detailsData, itemKey); //=> Tag Mismatch
 
+                                    //System.out.println("Details: " + decryptedDetails);
+
+                                    ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
+/*
                                     if (details.getFields() != null) {
                                         for (ItemField field : details.getFields()) {
                                             String val = field.getValue() != null ? field.getValue() : "N/A";
@@ -149,10 +161,11 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                             countFields++;
                                         }
                                     }
+ */
                                 }
                                 System.out.println();
                             } catch (Exception e) {
-                                System.out.println("Failed to decrypt item " + item.getUuid() + ": " + e.getMessage());
+                                System.out.println("Failed to read item " + item.getUuid() + ": " + e.getMessage());
                             }
                         }
                     } catch (Exception e) {

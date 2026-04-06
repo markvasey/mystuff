@@ -99,18 +99,29 @@ public class OpVaultDecryptor {
 
         byte[] iv = Arrays.copyOfRange(data, 0, 12);
         byte[] ciphertextWithTag = Arrays.copyOfRange(data, 12, data.length);
+        //byte[] ciphertextWithTag = Arrays.copyOfRange(data, 0, data.length);
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         // 1Password uses 128-bit (16-byte) authentication tag for GCM
         GCMParameterSpec spec = new GCMParameterSpec(128, iv);
         
         // Ensure we only use the first 32 bytes of the key for AES-256
+        //byte[] aesKey = key;
         byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 0, 32) : key;
+        //byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 32, 64) : key;
         
         cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey, "AES"), spec);
         return cipher.doFinal(ciphertextWithTag);
     }
-
+/*
+    public static String doDecrypt(byte [] encrypted, byte [] iv, SecureRandom random, SecretKey key)throws NoSuchPaddingException, NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException, UnsupportedEncodingException {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", "SunJCE");
+        GCMParameterSpec spec = new GCMParameterSpec(128, iv);
+        cipher.init(Cipher.DECRYPT_MODE, key, spec);
+        byte[] plainText = cipher.doFinal(encrypted);
+        return new String(plainText);
+    }
+*/
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
     public static String bytesToHex(byte[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
@@ -120,5 +131,23 @@ public class OpVaultDecryptor {
             hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
+    }
+
+    public static byte[] decryptOpus(byte[] encryptedData, byte[] key) throws Exception {
+        // OPVault uses: "op5" (3 bytes) + Type (1) + IV (16) + Ciphertext + MAC (32)
+        byte[] iv = new byte[16];
+        System.arraycopy(encryptedData, 4, iv, 0, 16);
+
+        int ciphertextLen = encryptedData.length - 4 - 16 - 32;
+        byte[] ciphertext = new byte[ciphertextLen];
+        System.arraycopy(encryptedData, 20, ciphertext, 0, ciphertextLen);
+
+        // Ensure we only use the first 32 bytes of the key for AES-256
+        byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 0, 32) : key;
+
+        Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey, "AES"), new IvParameterSpec(iv));
+
+        return cipher.doFinal(ciphertext);
     }
 }
