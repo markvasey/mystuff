@@ -3,7 +3,6 @@ package org.example.onepassword;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -13,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HexFormat;
 
 public class OpVaultDecryptor {
     //https://support.1password.com/cs/opvault-design/
@@ -161,6 +159,7 @@ public class OpVaultDecryptor {
         // 3. Decrypt Detail Data with the derived itemKey
         // itemKey should be 64 bytes (32 enc, 32 mac) for decryptOpData
         if (itemKey.length < 64) {
+            throw new Exception("decryptItems - itemKey too short: " + itemKey.length);
             // If it's shorter, maybe it needs hashing? But OPVault standard says it's 64 bytes.
             // Some older versions might be different, but let's try the direct 64 bytes first.
         }

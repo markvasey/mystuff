@@ -26,7 +26,7 @@ public class OnePasswordCliApplication implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         System.out.println("--- 1Password OPVault Reader ---");
 
         String vaultPathStr = "1Password.opvault";
@@ -92,7 +92,7 @@ public class OnePasswordCliApplication implements CommandLineRunner {
             System.out.println("Vault unlocked successfully!\n");
 
             File defaultDir = vaultPath.resolve("default").toFile();
-            File[] bandFiles = defaultDir.listFiles((dir, name) -> name.startsWith("band_") && name.endsWith(".js"));
+            File[] bandFiles = defaultDir.listFiles((_, name) -> name.startsWith("band_") && name.endsWith(".js"));
 
             if (bandFiles != null) {
                 int countTitles = 0;
@@ -107,7 +107,8 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                         if (start == -1 || end == -1) continue;
                         
                         String bandJson = bandJs.substring(start, end + 1);
-                        Map<String, VaultItem> items = objectMapper.readValue(bandJson, new TypeReference<Map<String, VaultItem>>() {});
+                        Map<String, VaultItem> items = objectMapper.readValue(bandJson, new TypeReference<>() {
+                        });
 
                         for (VaultItem item : items.values()) {
                             try {
