@@ -89,65 +89,6 @@ public class OpVaultDecryptor {
         if (plainLen > decryptedLen) {
             throw new Exception("decryptOpData - laintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
         }
-        
-        byte[] returnData = Arrays.copyOfRange(decrypted, decryptedLen - (int)plainLen, decryptedLen);
-        //byte[] returnData = Arrays.copyOf(decrypted, (int)plainLen);
-
-    /*
-        if(returnData.length != 64) {
-            throw new Exception("decryptOpData - returned data length exceed 64");
-        }
-     */
-
-        return returnData;
-    }
-
-    public static byte[] decryptOpData2(byte[] data, byte[] derivedKey) throws Exception {
-        if (data.length < 64) {
-            throw new Exception("decryptOpData2 - Data too short for opdata01: " + data.length);
-        }
-
-        ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-        byte[] magic = new byte[8];
-        buffer.get(magic);
-        String magicStr = new String(magic, StandardCharsets.US_ASCII);
-        if (!magicStr.equals(OP_DATA_MAGIC)) {
-            throw new Exception("decryptOpData2 - Invalid magic: " + bytesToHex(magic) + " (" + magicStr + ")");
-        }
-
-        long plainLen = buffer.getLong();
-        byte[] iv = new byte[16];
-        buffer.get(iv);
-
-        int hmacLen = 32;
-        int cipherLen = data.length - 32 - hmacLen;
-
-        byte[] ciphertext = new byte[cipherLen];
-        buffer.get(ciphertext);
-
-        // OPVault opdata01 key split: Encryption key first, MAC key second.
-        byte[] encKey = Arrays.copyOfRange(derivedKey, 0, 32);
-        byte[] macKey = Arrays.copyOfRange(derivedKey, 32, 64);
-
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(macKey, "HmacSHA256"));
-        byte[] computed = mac.doFinal(Arrays.copyOfRange(data, 32, data.length));
-        byte[] stored   = Arrays.copyOfRange(data, 0, 32);
-
-        if (!MessageDigest.isEqual(stored, computed)) {
-            throw new Exception("decryptOpData2 - HMAC mismatch");
-        }
-
-        // 2. Decrypt AES-256-CBC
-        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(encKey, "AES"), new IvParameterSpec(iv));
-        byte[] decrypted = cipher.doFinal(ciphertext);
-
-        // Extract the original plaintext (last plainLen bytes)
-        int decryptedLen = decrypted.length;
-        if (plainLen > decryptedLen) {
-            throw new Exception("decryptOpData2 - plaintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
-        }
 
         return Arrays.copyOfRange(decrypted, decryptedLen - (int)plainLen, decryptedLen);
     }
@@ -169,6 +110,8 @@ public class OpVaultDecryptor {
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
 
         /*
+            https://support.1password.com/cs/opvault-design/
+
             Data: 64 bytes
                 typedef struct {
                   uint8_t crypto_key[32];
@@ -177,27 +120,36 @@ public class OpVaultDecryptor {
             IV: The data before the MAC is the AES-CBC encrypted item keys using unique random 16-byte IV. - 16 bytes
             MAC: The last 32 bytes comprise the HMAC-SHA256 of the IV and the encrypted data. The MAC is computed with the master MAC key. - 32 bytes
          */
+        /*
+            https://darthnull.org/1pass-local-vaults/
 
-        System.out.println("itemKeyData length:" + itemKeyData.length);
+            The key_data structure includes four components:
 
-        byte[] stored = Arrays.copyOfRange(itemKeyData, 80,111);
-        //byte[] stored = Arrays.copyOfRange(itemKeyData, 0,31);
-        //byte[] stored = Arrays.copyOfRange(itemKeyData, 16,47);
+                Initialization Vector (IV) (16 bytes)
+                Item Encryption Key (32 bytes)
+                Item HMAC Key (32 bytes)
+                HMAC Tag (32 bytes)
+            First, compute the HMAC tag using the encrypted item keys (encryption + HMAC) as the message, and the Master HMAC Key as key.
+            If that matches the HMAC tag found in the structure, then we know it hasn’t been altered.
+            Now, use the Master AES key to decrypt the item keys, and those keys (AES + HMAC) to decrypt the actual vault item.
+         */
+
+        ByteBuffer buffer = ByteBuffer.wrap(itemKeyData).order(ByteOrder.LITTLE_ENDIAN);
+        byte[] iv = new byte[16];
+        buffer.get(iv);
+        byte[] ciphertext = new byte[64];
+        buffer.get(ciphertext);
+        byte[] stored = new byte[32];
+        buffer.get(stored);
 
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
-        byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 0, 79));
-        //byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 32, 111));
-        //byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 48, 111));
+
+        byte[] computed = mac.doFinal(ciphertext);
 
         if (!MessageDigest.isEqual(computed, stored)) {
-            System.out.println("stored: " + HexFormat.of().formatHex(stored));
-            System.out.println("computed: " + HexFormat.of().formatHex(computed));
             throw new Exception("decryptItems - HMAC mismatch");
         }
-
-        byte[] iv = Arrays.copyOfRange(itemKeyData, 32, 48);
-        byte[] ciphertext = Arrays.copyOfRange(itemKeyData, 48, itemKeyData.length);
 
         // 2. Decrypt with vaultKey
         Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding"); // exact 32 bytes, no padding needed
