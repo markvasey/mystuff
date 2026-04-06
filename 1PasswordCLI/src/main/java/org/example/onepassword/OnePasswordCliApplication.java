@@ -78,16 +78,13 @@ public class OnePasswordCliApplication implements CommandLineRunner {
             byte[] masterKeyData = Base64.getDecoder().decode(profile.getMasterKey());
             byte[] overviewKeyData = Base64.getDecoder().decode(profile.getOverviewKey());
 
-            // Decrypting the vault keys using the Master Unlock Key (derived from password)
-            //byte[] vaultMasterKey = OpVaultDecryptor.decryptOpData(masterKeyData, masterUnlockKey);
-            //byte[] vaultOverviewKey = OpVaultDecryptor.decryptOpData(overviewKeyData, masterUnlockKey);
-
             byte[] vaultMasterKeyRaw = OpVaultDecryptor.decryptOpData(masterKeyData, masterUnlockKey);
             byte[] vaultOverviewKeyRaw = OpVaultDecryptor.decryptOpData(overviewKeyData, masterUnlockKey);
 
             java.security.MessageDigest sha512 = java.security.MessageDigest.getInstance("SHA-512");
             byte[] vaultMasterKey = sha512.digest(vaultMasterKeyRaw);
             byte[] vaultOverviewKey = sha512.digest(vaultOverviewKeyRaw);
+
             System.out.println("Vault unlocked successfully!\n");
 
             File defaultDir = vaultPath.resolve("default").toFile();
@@ -126,13 +123,18 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                     byte[] itemKey = vaultMasterKey;
                                     if (item.getK() != null) {
                                         byte[] encryptedK = Base64.getDecoder().decode(item.getK());
+                                        byte[] itemKeyRaw;
+                                        
                                         // Check if k is an opdata01 blob
                                         if (encryptedK.length >= 8 && new String(encryptedK, 0, 8, StandardCharsets.US_ASCII).equals(OpVaultDecryptor.OP_DATA_MAGIC)) {
-                                            itemKey = OpVaultDecryptor.decryptOpData(encryptedK, vaultMasterKey);
+                                            itemKeyRaw = OpVaultDecryptor.decryptOpData(encryptedK, vaultMasterKey);
                                         } else {
-                                            // If not opdata, it might be raw? But usually opvault keys are wrapped.
-                                            // We'll stick with vaultMasterKey if k is weird.
+                                            // Fallback for 1Password 7 AES-GCM format
+                                            itemKeyRaw = OpVaultDecryptor.decryptAesGcm(encryptedK, vaultMasterKey);
                                         }
+                                        
+                                        // The result of k decryption must be hashed with SHA-512 to get the 64-byte item key
+                                        itemKey = sha512.digest(itemKeyRaw);
                                     }
 
                                     byte[] detailsData = Base64.getDecoder().decode(item.getD());
@@ -148,10 +150,9 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                         }
                                     }
                                 }
-                                System.out.println(); // Blank line between items
+                                System.out.println();
                             } catch (Exception e) {
-                                // Skip items that fail to decrypt
-                                // System.err.println("Failed to decrypt item " + item.getUuid() + ": " + e.getMessage());
+                                System.out.println("Failed to decrypt item " + item.getUuid() + ": " + e.getMessage());
                             }
                         }
                     } catch (Exception e) {
