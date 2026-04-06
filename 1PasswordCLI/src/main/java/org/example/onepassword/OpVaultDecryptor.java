@@ -163,25 +163,26 @@ public class OpVaultDecryptor {
 
     public static String decryptItems(byte[] itemKeyData, byte[] detailData, byte[] vaultMasterKey) throws Exception {
 
-        byte[] stored = Arrays.copyOfRange(itemKeyData, 0, 32);
-        byte[] iv = Arrays.copyOfRange(itemKeyData, 32, 48);
-        byte[] ciphertext = Arrays.copyOfRange(itemKeyData, 48, itemKeyData.length);
-
         byte[] vaultEncKey = Arrays.copyOfRange(vaultMasterKey, 0, 32);
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
 
-
-        byte[] computed = new byte[0];
-        for(int i=0; i<(itemKeyData.length-1); i++) {
-            for(int j=(itemKeyData.length - i); j>0; j--) {
-                //System.out.println("Trying - i=" + i + ", j=" + j);
-                // 1. Verify HMAC (uses vaultMacKey)
-                Mac mac = Mac.getInstance("HmacSHA256");
-                mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
-                computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, i, i+j));
-                if (MessageDigest.isEqual(computed, stored)) {
-                    System.out.println("Success - i=" + i + ", j=" + j);
-                    break;
+        byte[] stored = new byte[32];
+        byte[] computed = new byte[32];
+        for(int k=0; k<(itemKeyData.length-32); k++) {
+            stored = Arrays.copyOfRange(itemKeyData, k, k+31);
+            for (int i = 0; i < (itemKeyData.length - 1); i++) {
+                for (int j = (itemKeyData.length - i); j > 0; j--) {
+                    //System.out.println("Trying - i=" + i + ", j=" + j);
+                    // 1. Verify HMAC (uses vaultMacKey)
+                    Mac mac = Mac.getInstance("HmacSHA256");
+                    mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
+                    computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, i, i + j));
+                    if (MessageDigest.isEqual(computed, stored)) {
+                        System.out.println("Success - i=" + i + ", j=" + j+ ", k=" + k);
+                        System.out.println("stored: " + HexFormat.of().formatHex(stored));
+                        System.out.println("computed: " + HexFormat.of().formatHex(computed));
+                        break;
+                    }
                 }
             }
         }
@@ -191,6 +192,9 @@ public class OpVaultDecryptor {
             System.out.println("computed: " + HexFormat.of().formatHex(computed));
             throw new Exception("decryptItems - HMAC mismatch");
         }
+
+        byte[] iv = Arrays.copyOfRange(itemKeyData, 32, 48);
+        byte[] ciphertext = Arrays.copyOfRange(itemKeyData, 48, itemKeyData.length);
 
         // 2. Decrypt with vaultKey
         Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding"); // exact 32 bytes, no padding needed
