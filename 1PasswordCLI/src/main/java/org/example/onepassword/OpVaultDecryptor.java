@@ -10,6 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -23,7 +24,7 @@ public class OpVaultDecryptor {
     public static byte[] deriveKeys(String password, String saltBase64, int iterations) throws Exception {
         byte[] salt = Base64.getDecoder().decode(saltBase64);
         
-        byte[] passwordBytes = password.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] passwordBytes = password.getBytes(StandardCharsets.UTF_8);
         char[] passwordChars = new char[passwordBytes.length];
         for (int i = 0; i < passwordBytes.length; i++) {
             passwordChars[i] = (char) (passwordBytes[i] & 0xFF);
@@ -49,7 +50,7 @@ public class OpVaultDecryptor {
         ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
         byte[] magic = new byte[8];
         buffer.get(magic);
-        String magicStr = new String(magic, java.nio.charset.StandardCharsets.US_ASCII);
+        String magicStr = new String(magic, StandardCharsets.US_ASCII);
         if (!magicStr.equals(OP_DATA_MAGIC)) {
             throw new Exception("decryptOpData - Invalid magic: " + bytesToHex(magic) + " (" + magicStr + ")");
         }
@@ -72,7 +73,7 @@ public class OpVaultDecryptor {
         hmac.update(data, 0, data.length - hmacLen);
         byte[] computedMac = hmac.doFinal();
         
-        if (!java.security.MessageDigest.isEqual(expectedMac, computedMac)) {
+        if (!MessageDigest.isEqual(expectedMac, computedMac)) {
             throw new Exception("decryptOpData - HMAC mismatch");
         }
 
@@ -107,7 +108,7 @@ public class OpVaultDecryptor {
         ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
         byte[] magic = new byte[8];
         buffer.get(magic);
-        String magicStr = new String(magic, java.nio.charset.StandardCharsets.US_ASCII);
+        String magicStr = new String(magic, StandardCharsets.US_ASCII);
         if (!magicStr.equals(OP_DATA_MAGIC)) {
             throw new Exception("decryptOpData2 - Invalid magic: " + bytesToHex(magic) + " (" + magicStr + ")");
         }
@@ -131,7 +132,7 @@ public class OpVaultDecryptor {
         byte[] computed = mac.doFinal(Arrays.copyOfRange(data, 32, data.length));
         byte[] stored   = Arrays.copyOfRange(data, 0, 32);
 
-        if (!java.security.MessageDigest.isEqual(stored, computed)) {
+        if (!MessageDigest.isEqual(stored, computed)) {
             throw new Exception("decryptOpData2 - HMAC mismatch");
         }
 
@@ -143,38 +144,11 @@ public class OpVaultDecryptor {
         // Extract the original plaintext (last plainLen bytes)
         int decryptedLen = decrypted.length;
         if (plainLen > decryptedLen) {
-            throw new Exception("decryptOpData2 - laintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
+            throw new Exception("decryptOpData2 - plaintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
         }
 
         return Arrays.copyOfRange(decrypted, decryptedLen - (int)plainLen, decryptedLen);
     }
-
-    /**
-     * Decrypts data using AES-256-GCM (used for some 1Password 7 items).
-     * Structure: [IV(12)][Ciphertext(n)][Tag(16)]
-     */
-    public static byte[] decryptAesGcm(byte[] data, byte[] key) throws Exception {
-        if (data.length < 28) {
-            throw new Exception("decryptAesGcm - Data too short for AES-GCM: " + data.length);
-        }
-
-        byte[] iv = Arrays.copyOfRange(data, 0, 12);
-        byte[] ciphertextWithTag = Arrays.copyOfRange(data, 12, data.length);
-        //byte[] ciphertextWithTag = Arrays.copyOfRange(data, 0, data.length);
-
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        // 1Password uses 128-bit (16-byte) authentication tag for GCM
-        GCMParameterSpec spec = new GCMParameterSpec(128, iv);
-        
-        // Ensure we only use the first 32 bytes of the key for AES-256
-        //byte[] aesKey = key;
-        byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 0, 32) : key;
-        //byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 32, 64) : key;
-        
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey, "AES"), spec);
-        return cipher.doFinal(ciphertextWithTag);
-    }
-
 
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
     public static String bytesToHex(byte[] bytes) {
@@ -187,51 +161,34 @@ public class OpVaultDecryptor {
         return new String(hexChars);
     }
 
-    public static byte[] decryptOpus(byte[] encryptedData, byte[] key) throws Exception {
-        // OPVault uses: "op5" (3 bytes) + Type (1) + IV (16) + Ciphertext + MAC (32)
-        byte[] iv = new byte[16];
-        System.arraycopy(encryptedData, 4, iv, 0, 16);
-
-        int ciphertextLen = encryptedData.length - 4 - 16 - 32;
-        byte[] ciphertext = new byte[ciphertextLen];
-        System.arraycopy(encryptedData, 20, ciphertext, 0, ciphertextLen);
-
-        // Ensure we only use the first 32 bytes of the key for AES-256
-        byte[] aesKey = key.length > 32 ? Arrays.copyOfRange(key, 0, 32) : key;
-
-        Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(aesKey, "AES"), new IvParameterSpec(iv));
-
-        return cipher.doFinal(ciphertext);
-    }
-
     public static String decryptItems(byte[] itemKeyData, byte[] detailData, byte[] vaultMasterKey) throws Exception {
 
-        byte[] storedMAc = Arrays.copyOfRange(itemKeyData, 0, 32);
+        byte[] stored = Arrays.copyOfRange(itemKeyData, 0, 32);
         byte[] iv = Arrays.copyOfRange(itemKeyData, 32, 48);
         byte[] ciphertext = Arrays.copyOfRange(itemKeyData, 48, itemKeyData.length);
 
-        // OPVault opdata01 key split: Encryption key first, MAC key second.
         byte[] vaultEncKey = Arrays.copyOfRange(vaultMasterKey, 0, 32);
         byte[] vaultMacKey = Arrays.copyOfRange(vaultMasterKey, 32, 64);
 
-        //System.out.println("k blob length: " + itemKeyData.length);
-        //System.out.println("vaultKey length: " + vaultEncKey.length);
-        //System.out.println("vaultMacKey length: " + vaultMacKey.length);
 
-        // 1. Verify HMAC (uses vaultMacKey)
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
+        byte[] computed = new byte[0];
+        for(int i=0; i<(itemKeyData.length-1); i++) {
+            for(int j=(itemKeyData.length - i); j>0; j--) {
+                //System.out.println("Trying - i=" + i + ", j=" + j);
+                // 1. Verify HMAC (uses vaultMacKey)
+                Mac mac = Mac.getInstance("HmacSHA256");
+                mac.init(new SecretKeySpec(vaultMacKey, "HmacSHA256"));
+                computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, i, i+j));
+                if (MessageDigest.isEqual(computed, stored)) {
+                    System.out.println("Success - i=" + i + ", j=" + j);
+                    break;
+                }
+            }
+        }
 
-        //byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 32, itemKeyData.length));
-        byte[] computed = mac.doFinal(Arrays.copyOfRange(itemKeyData, 0, 80));
-
-        //byte[] stored   = Arrays.copyOfRange(itemKeyData, 0, 32);
-
-        //System.out.println("computed: " + HexFormat.of().formatHex(computed));
-        //System.out.println("stored: " + HexFormat.of().formatHex(storedMAc));
-
-        if (!java.security.MessageDigest.isEqual(computed, storedMAc)) {
+        if (!MessageDigest.isEqual(computed, stored)) {
+            System.out.println("stored: " + HexFormat.of().formatHex(stored));
+            System.out.println("computed: " + HexFormat.of().formatHex(computed));
             throw new Exception("decryptItems - HMAC mismatch");
         }
 
@@ -242,13 +199,10 @@ public class OpVaultDecryptor {
                 new IvParameterSpec(iv));
         byte[] itemKeyRaw = cipher.doFinal(ciphertext);
 
-        java.security.MessageDigest sha512 = java.security.MessageDigest.getInstance("SHA-512");
+        MessageDigest sha512 = MessageDigest.getInstance("SHA-512");
         byte[] itemKey = sha512.digest(itemKeyRaw);
 
-        // Same opdata01 process as Step 2, but use itemMacKey + itemKey
         // Result is a UTF-8 JSON string with the item fields
-        String detailJson = new String(decryptOpData(detailData, itemKey), StandardCharsets.UTF_8);
-
-        return detailJson;
+        return new String(decryptOpData(detailData, itemKey), StandardCharsets.UTF_8);
     }
 }

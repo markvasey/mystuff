@@ -122,16 +122,14 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                 countTitles++;
 
                                 // 2. Decrypt Details
-                                if (item.getD() != null) {
-                                    if (item.getK() != null) {
-                                        byte[] encryptedK = Base64.getDecoder().decode(item.getK());
-                                        byte[] encryptedD = Base64.getDecoder().decode(item.getD());
+                                if (item.getD() != null && item.getK() != null) {
+                                    byte[] encryptedK = Base64.getDecoder().decode(item.getK());
+                                    byte[] encryptedD = Base64.getDecoder().decode(item.getD());
 
-                                        String decryptedDetails = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
-                                        System.out.println("Decrypted details: " + decryptedDetails);
+                                    String decryptedDetails = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
+                                    System.out.println("Decrypted details: " + decryptedDetails);
 
-                                        //ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
-                                    }
+                                    //ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
                                 }
                                 System.out.println();
                             } catch (Exception e) {
