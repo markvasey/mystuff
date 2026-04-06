@@ -116,52 +116,22 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                                 byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
                                 ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
                                 String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
+                                String url = overview.getUrl() != null ? overview.getUrl() : "No URL";
 
-                                System.out.println("Title: " + title);
+                                System.out.println("Title: " + title + ", URL: " + url);
                                 countTitles++;
 
                                 // 2. Decrypt Details
                                 if (item.getD() != null) {
-                                    byte[] itemKey = vaultMasterKey;
                                     if (item.getK() != null) {
                                         byte[] encryptedK = Base64.getDecoder().decode(item.getK());
-                                        byte[] itemKeyRaw;
-                                        
-                                        // Check if k is an opdata01 blob
-                                        String strTest = new String(encryptedK, 0, 8, StandardCharsets.US_ASCII);
-                                        if (encryptedK.length >= 8 && strTest.equals(OpVaultDecryptor.OP_DATA_MAGIC)) {
-                                            System.out.println("decryptOpData");
-                                            itemKeyRaw = OpVaultDecryptor.decryptOpData(encryptedK, vaultMasterKey);
-                                        } else {
-                                            System.out.println("decryptAesGcm");
-                                            // Fallback for 1Password 7 AES-GCM format
-                                            itemKeyRaw = OpVaultDecryptor.decryptAesGcm(encryptedK, vaultMasterKey);
-                                            //itemKeyRaw = OpVaultDecryptor.decryptOpus(encryptedK, vaultMasterKey);
-                                        }
-                                        
-                                        // The result of k decryption must be hashed with SHA-512 to get the 64-byte item key
-                                        itemKey = sha512.digest(itemKeyRaw);
-                                        //itemKey = itemKeyRaw;
+                                        byte[] encryptedD = Base64.getDecoder().decode(item.getD());
+
+                                        String decryptedDetails = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
+                                        System.out.println("Decrypted details: " + decryptedDetails);
+
+                                        //ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
                                     }
-
-                                    byte[] detailsData = Base64.getDecoder().decode(item.getD());
-                                    //byte[] decryptedDetails = OpVaultDecryptor.decryptOpData(detailsData, itemKey); //=> Tag Mismatch
-                                    byte[] decryptedDetails = OpVaultDecryptor.decryptAesGcm(detailsData, itemKey); //=> Tag Mismatch
-                                    //byte[] decryptedDetails = OpVaultDecryptor.decryptOpus(detailsData, itemKey); //=> Tag Mismatch
-
-                                    //System.out.println("Details: " + decryptedDetails);
-
-                                    ItemDetails details = objectMapper.readValue(decryptedDetails, ItemDetails.class);
-/*
-                                    if (details.getFields() != null) {
-                                        for (ItemField field : details.getFields()) {
-                                            String val = field.getValue() != null ? field.getValue() : "N/A";
-                                            String name = field.getName() != null ? field.getName() : (field.getTitle() != null ? field.getTitle() : "Unknown");
-                                            System.out.println("  " + name + " : " + val);
-                                            countFields++;
-                                        }
-                                    }
- */
                                 }
                                 System.out.println();
                             } catch (Exception e) {
