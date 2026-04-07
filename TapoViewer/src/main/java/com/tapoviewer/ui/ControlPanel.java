@@ -178,7 +178,7 @@ public class ControlPanel extends JPanel {
         // Stop current stream and client if any
         if (client != null) {
             videoPanel.stop();
-            // Optional: add a explicit disconnect/cleanup in CameraClient if needed
+            client.release();
         }
 
         CameraSettings settings = new CameraSettings();
@@ -218,6 +218,12 @@ public class ControlPanel extends JPanel {
             });
             return null;
         });
+    }
+
+    public void release() {
+        if (client != null) {
+            client.release();
+        }
     }
 
     private void move(PtzType type) {

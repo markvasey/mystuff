@@ -26,6 +26,7 @@ public class MainFrame extends JFrame {
             public void windowClosing(WindowEvent e) {
                 videoPanel.stop();
                 videoPanel.release();
+                controlPanel.release();
             }
         });
     }
