@@ -22,7 +22,7 @@ public class CameraClient {
         this.settings = settings;
     }
 
-    public CompletableFuture<Void> connect() {
+    public CompletableFuture<Boolean> connect() {
         String onvifUrl = settings.getIp() + ":" + settings.getOnvifPort();
         return OnvifClient.connect(onvifUrl)
                 .credentials(settings.getOnvifUsername(), settings.getOnvifPassword())
@@ -34,26 +34,24 @@ public class CameraClient {
                 .thenCompose(v -> onvifDevice.device().getCapabilities())
                 .thenAccept(caps -> {
                     if (caps.getPtzXaddr() != null) {
-                        logger.info("PTZ Capability found at: {}", caps.getPtzXaddr());
-                        // The library might not have parsed the PTZ path correctly from the base URL.
-                        // We extract the path from the full XAddr if needed.
                         String ptzPath = caps.getPtzXaddr();
                         if (ptzPath.contains("/onvif/")) {
                             ptzPath = ptzPath.substring(ptzPath.indexOf("/onvif/"));
                         }
                         onvifDevice.getPath().setPtzPath(ptzPath);
-                        logger.info("Set PTZ Path to: {}", ptzPath);
-                    } else {
-                        logger.warn("No PTZ capability reported by camera.");
                     }
                 })
-                .thenCompose(v -> onvifDevice.media().getMediaProfiles())
-                .thenAccept(profiles -> {
-                    if (!profiles.isEmpty()) {
-                        logger.info("Retrieved {} ONVIF profiles.", profiles.size());
-                    } else {
-                        logger.warn("No ONVIF profiles found.");
-                    }
+                .thenCompose(v -> onvifDevice.ptz().getStatus())
+                .thenApply(status -> {
+                    // If getStatus contains "zoom", we assume it's supported.
+                    // Many fixed-lens Tapo cameras return a status without a Zoom node.
+                    boolean zoomSupported = status != null && status.toLowerCase().contains("zoom");
+                    logger.info("Zoom support detected: {}", zoomSupported);
+                    return zoomSupported;
+                })
+                .exceptionally(ex -> {
+                    logger.warn("Could not determine zoom support, defaulting to false: {}", ex.getMessage());
+                    return false;
                 });
     }
 

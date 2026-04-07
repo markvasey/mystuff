@@ -28,6 +28,13 @@ public class ControlPanel extends JPanel {
     private final JCheckBox lowResCheck = new JCheckBox("Low Res (stream2)", false);
     private final JButton connectBtn = new JButton("Connect");
 
+    private final JButton upBtn = new JButton("▲");
+    private final JButton downBtn = new JButton("▼");
+    private final JButton leftBtn = new JButton("◀");
+    private final JButton rightBtn = new JButton("▶");
+    private final JButton zoomInBtn = new JButton("Zoom +");
+    private final JButton zoomOutBtn = new JButton("Zoom -");
+
     private CameraClient client;
     private final VideoPanel videoPanel;
     private boolean isAutoConnecting = false;
@@ -63,13 +70,6 @@ public class ControlPanel extends JPanel {
         gbc.fill = GridBagConstraints.BOTH;
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        JButton upBtn = new JButton("▲");
-        JButton downBtn = new JButton("▼");
-        JButton leftBtn = new JButton("◀");
-        JButton rightBtn = new JButton("▶");
-        JButton zoomInBtn = new JButton("Zoom +");
-        JButton zoomOutBtn = new JButton("Zoom -");
-
         gbc.gridx = 1; gbc.gridy = 0; ptzPanel.add(upBtn, gbc);
         gbc.gridx = 0; gbc.gridy = 1; ptzPanel.add(leftBtn, gbc);
         gbc.gridx = 2; gbc.gridy = 1; ptzPanel.add(rightBtn, gbc);
@@ -87,6 +87,18 @@ public class ControlPanel extends JPanel {
         rightBtn.addActionListener(e -> move(PtzType.RIGHT));
         zoomInBtn.addActionListener(e -> move(PtzType.ZOOM_IN));
         zoomOutBtn.addActionListener(e -> move(PtzType.ZOOM_OUT));
+        
+        // Initially disable PTZ until connected
+        setPtzEnabled(false, false);
+    }
+
+    private void setPtzEnabled(boolean ptzEnabled, boolean zoomEnabled) {
+        upBtn.setEnabled(ptzEnabled);
+        downBtn.setEnabled(ptzEnabled);
+        leftBtn.setEnabled(ptzEnabled);
+        rightBtn.setEnabled(ptzEnabled);
+        zoomInBtn.setEnabled(ptzEnabled && zoomEnabled);
+        zoomOutBtn.setEnabled(ptzEnabled && zoomEnabled);
     }
 
     private void loadCameraXml() {
@@ -120,7 +132,7 @@ public class ControlPanel extends JPanel {
     }
 
     private void setupCombos() {
-        isAutoConnecting = true; // Prevent connection during setup
+        isAutoConnecting = true;
         for (String house : houseData.keySet()) {
             houseCombo.addItem(house);
         }
@@ -143,15 +155,12 @@ public class ControlPanel extends JPanel {
                 String ip = houseData.get(selectedHouse).get(selectedCam);
                 ipLabel.setText(ip);
                 
-                // If we were already connected, switch to the new camera
                 if (!isAutoConnecting && connectBtn.getText().equals("Connected")) {
-                    logger.info("Camera selection changed, switching camera...");
                     connect();
                 }
             }
         });
 
-        // Trigger initial load
         if (houseCombo.getItemCount() > 0) {
             houseCombo.setSelectedIndex(0);
         }
@@ -160,43 +169,36 @@ public class ControlPanel extends JPanel {
 
     private void loadSecrets() {
         try (InputStream input = getClass().getClassLoader().getResourceAsStream("secret.txt")) {
-            if (input == null) {
-                logger.warn("secret.txt not found in resources");
-                return;
-            }
+            if (input == null) return;
             Properties prop = new Properties();
             prop.load(input);
             userField.setText(prop.getProperty("username", ""));
             passField.setText(prop.getProperty("password", ""));
-            logger.info("Loaded credentials from secret.txt");
         } catch (Exception ex) {
             logger.error("Error loading secret.txt", ex);
         }
     }
 
     private void connect() {
-        // Stop current stream and client if any
         if (client != null) {
             videoPanel.stop();
             client.release();
         }
 
+        setPtzEnabled(false, false);
+
         CameraSettings settings = new CameraSettings();
         settings.setIp(ipLabel.getText().trim());
-        settings.setOnvifPort(2020);
         settings.setRtspUsername(userField.getText().trim());
         settings.setRtspPassword(new String(passField.getPassword()).trim());
         settings.setOnvifUsername(userField.getText().trim());
         settings.setOnvifPassword(new String(passField.getPassword()).trim());
 
-        logger.info("Connecting to IP: {} via ONVIF (port 2020)...", settings.getIp());
-        
         connectBtn.setEnabled(false);
         connectBtn.setText("Connecting...");
 
         client = new CameraClient(settings);
-        client.connect().thenRun(() -> {
-            logger.info("ONVIF Connection Successful. Handing off to RTSP engine...");
+        client.connect().thenAccept(zoomSupported -> {
             SwingUtilities.invokeLater(() -> {
                 String stream = lowResCheck.isSelected() ? "stream2" : "stream1";
                 videoPanel.play(
@@ -207,7 +209,8 @@ public class ControlPanel extends JPanel {
                         settings.getRtspPassword()
                 );
                 connectBtn.setText("Connected");
-                connectBtn.setEnabled(true); // Allow manual reconnect if needed
+                connectBtn.setEnabled(true);
+                setPtzEnabled(true, zoomSupported);
             });
         }).exceptionally(ex -> {
             logger.error("ONVIF Connection Failed: {}", ex.getMessage());
