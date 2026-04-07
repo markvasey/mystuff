@@ -87,7 +87,7 @@ public class OpVaultDecryptor {
         // Extract the original plaintext (last plainLen bytes)
         int decryptedLen = decrypted.length;
         if (plainLen > decryptedLen) {
-            throw new Exception("decryptOpData - laintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
+            throw new Exception("decryptOpData - plaintext length in header (" + plainLen + ") is greater than decrypted buffer length (" + decryptedLen + ")");
         }
 
         return Arrays.copyOfRange(decrypted, decryptedLen - (int)plainLen, decryptedLen);

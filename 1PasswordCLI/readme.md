@@ -131,15 +131,17 @@ Imagine we find an item with these fields:
 
 #### Step A: Decrypt the `k` field
 1.  We take our **Vault Master Key**.
-2.  We verify and decrypt the `k` blob.
-3.  This reveals the **Item Key** (64 bytes unique to this item).
+2.  We split it into its two 32-byte halves (**Encryption** and **MAC**).
+3.  We verify the HMAC of the `k` blob and then decrypt the ciphertext.
+4.  This reveals the **Item Key** (a 64-byte key unique to this specific item).
 
 #### Step B: Decrypt the `d` field
-1.  We take the **Item Key** from Step A.
-2.  We verify the HMAC signature at the end of the `d` blob.
-3.  We use the IV (bytes 16-31) and the Item Key to decrypt the ciphertext.
+1.  We take the **Item Key** from Step A and split it into its two 32-byte halves.
+2.  We verify the HMAC signature at the end of the `d` blob using the **MAC half**.
+3.  We use the IV (bytes 16-31 of the blob) and the **Encryption half** to decrypt the ciphertext.
 4.  **Result**: The JSON string:
     `{"fields":[{"name":"username","value":"markvasey"},{"name":"password","value":"correct-horse-battery-staple"}]}`
+
 
 ### 5. Final Display
 The `DisplayProcessor` parses this JSON and prints:
