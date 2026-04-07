@@ -15,7 +15,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.*;
 import java.io.InputStream;
 import java.util.*;
-import java.util.List;
 
 public class ControlPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(ControlPanel.class);
@@ -31,6 +30,7 @@ public class ControlPanel extends JPanel {
 
     private CameraClient client;
     private final VideoPanel videoPanel;
+    private boolean isAutoConnecting = false;
     
     private final Map<String, Map<String, String>> houseData = new LinkedHashMap<>();
 
@@ -120,6 +120,7 @@ public class ControlPanel extends JPanel {
     }
 
     private void setupCombos() {
+        isAutoConnecting = true; // Prevent connection during setup
         for (String house : houseData.keySet()) {
             houseCombo.addItem(house);
         }
@@ -141,6 +142,12 @@ public class ControlPanel extends JPanel {
             if (selectedHouse != null && selectedCam != null) {
                 String ip = houseData.get(selectedHouse).get(selectedCam);
                 ipLabel.setText(ip);
+                
+                // If we were already connected, switch to the new camera
+                if (!isAutoConnecting && connectBtn.getText().equals("Connected")) {
+                    logger.info("Camera selection changed, switching camera...");
+                    connect();
+                }
             }
         });
 
@@ -148,6 +155,7 @@ public class ControlPanel extends JPanel {
         if (houseCombo.getItemCount() > 0) {
             houseCombo.setSelectedIndex(0);
         }
+        isAutoConnecting = false;
     }
 
     private void loadSecrets() {
@@ -167,6 +175,12 @@ public class ControlPanel extends JPanel {
     }
 
     private void connect() {
+        // Stop current stream and client if any
+        if (client != null) {
+            videoPanel.stop();
+            // Optional: add a explicit disconnect/cleanup in CameraClient if needed
+        }
+
         CameraSettings settings = new CameraSettings();
         settings.setIp(ipLabel.getText().trim());
         settings.setOnvifPort(2020);
@@ -177,7 +191,6 @@ public class ControlPanel extends JPanel {
 
         logger.info("Connecting to IP: {} via ONVIF (port 2020)...", settings.getIp());
         
-        // Disable connect button during attempt
         connectBtn.setEnabled(false);
         connectBtn.setText("Connecting...");
 
@@ -194,6 +207,7 @@ public class ControlPanel extends JPanel {
                         settings.getRtspPassword()
                 );
                 connectBtn.setText("Connected");
+                connectBtn.setEnabled(true); // Allow manual reconnect if needed
             });
         }).exceptionally(ex -> {
             logger.error("ONVIF Connection Failed: {}", ex.getMessage());
