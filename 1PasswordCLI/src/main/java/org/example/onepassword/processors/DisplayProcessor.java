@@ -22,12 +22,24 @@ public class DisplayProcessor {
         countFields = 0;
     }
 
-    public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey) {
+    public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
 
         int itemCounter = 0;
         for (VaultItem item : items.values()) {
             try {
                 if (item.getO() == null) continue;
+
+                // 1. Decrypt Overview
+                byte[] overviewData = Base64.getDecoder().decode(item.getO());
+                byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
+                ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
+                String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
+
+                // Filter by search string
+                if (searchString != null && !searchString.isBlank() &&
+                        !title.toLowerCase().contains(searchString.toLowerCase())) {
+                        continue;
+                }
 
                 itemCounter++;
 
@@ -35,12 +47,7 @@ public class DisplayProcessor {
                 System.out.println();
 
                 String categoryNameText = item.getCategory() == null ? "" : item.getCategory() + " - ";
-
-                // 1. Decrypt Overview
-                byte[] overviewData = Base64.getDecoder().decode(item.getO());
-                byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
-                ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
-                String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
+                
                 String urlText = overview.getUrl() == null ? "" : ", URL: " + overview.getUrl();
 
                 System.out.println(categoryNameText + "Title: " + title + urlText);

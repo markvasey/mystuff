@@ -39,8 +39,12 @@ public class OnePasswordCliApplication implements CommandLineRunner {
             byte[] vaultMasterKey = VaultKeysProcessor.getVaultMasterKey();
             byte[] vaultOverviewKey =  VaultKeysProcessor.getVaultOverviewKey();
 
+            System.out.print("Enter search string (blank for all): ");
+            Scanner searchScanner = new Scanner(System.in);
+            String searchString = searchScanner.nextLine();
+
             //Process Bands
-            VaultBandsProcessor.ProcessVault(vaultPath,vaultMasterKey,vaultOverviewKey);
+            VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString);
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
         }

@@ -14,7 +14,7 @@ public class VaultBandsProcessor {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    public static void ProcessVault(Path vaultPath, byte[] vaultMasterKey, byte[] vaultOverviewKey) {
+    public static void ProcessVault(Path vaultPath, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
         File defaultDir = vaultPath.resolve("default").toFile();
         File[] bandFiles = defaultDir.listFiles((_, name) -> name.startsWith("band_") && name.endsWith(".js"));
 
@@ -31,7 +31,7 @@ public class VaultBandsProcessor {
                     String bandJson = bandJs.substring(start, end + 1);
                     Map<String, VaultItem> items = objectMapper.readValue(bandJson, new TypeReference<>() { });
 
-                    DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey);
+                    DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey, searchString);
                 } catch (Exception e) {
                     System.out.println("Error reading band file: " + bandFile.getName() + ", " + e.getMessage());
                 }

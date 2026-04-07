@@ -59,7 +59,10 @@ class DisplayProcessorTest {
         invalidD.setD("not-base64-garbage!!!");
         items.put("UUID6", invalidD);
 
-        assertDoesNotThrow(() -> DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey));
+        assertDoesNotThrow(() -> DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey, null));
+        
+        // Additional test for search filtering
+        assertDoesNotThrow(() -> DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey, "Visa"));
     }
 
     private VaultItem createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {

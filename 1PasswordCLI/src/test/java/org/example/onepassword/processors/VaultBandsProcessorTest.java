@@ -1,6 +1,5 @@
 package org.example.onepassword.processors;
 
-import org.example.onepassword.OpVaultDecryptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,6 +24,52 @@ class VaultBandsProcessorTest {
     Path tempDir;
 
     @Test
+    void testProcessVaultEmpty() {
+        Path vaultPath = tempDir.resolve("vault");
+        try {
+            Files.createDirectories(vaultPath.resolve("default"));
+        } catch (IOException e) {
+            fail("Failed to create test directory");
+        }
+
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, new byte[64], new byte[64], null));
+    }
+
+    @Test
+    void testProcessVaultWithValidBand() throws IOException {
+        Path vaultPath = tempDir.resolve("vault");
+        Path defaultDir = vaultPath.resolve("default");
+        Files.createDirectories(defaultDir);
+
+        String bandContent = "ld({\"UUID1\": {\"category\":\"001\"}});";
+        Files.writeString(defaultDir.resolve("band_0.js"), bandContent);
+
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, new byte[64], new byte[64], null));
+    }
+
+    @Test
+    void testProcessVaultSkipsConflicted() throws IOException {
+        Path vaultPath = tempDir.resolve("vault");
+        Path defaultDir = vaultPath.resolve("default");
+        Files.createDirectories(defaultDir);
+
+        Files.writeString(defaultDir.resolve("band_0 (mark's conflicted copy).js"), "invalid json");
+
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, new byte[64], new byte[64], null));
+    }
+
+    @Test
+    void testProcessVaultInvalidJson() throws IOException {
+        Path vaultPath = tempDir.resolve("vault");
+        Path defaultDir = vaultPath.resolve("default");
+        Files.createDirectories(defaultDir);
+
+        Files.writeString(defaultDir.resolve("band_1.js"), "ld({invalid});");
+
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, new byte[64], new byte[64], null));
+    }
+
+    @Test
     void testProcessVaultRealistic() throws Exception {
         Path vaultPath = tempDir.resolve("vault");
         Path defaultDir = vaultPath.resolve("default");
@@ -37,31 +82,32 @@ class VaultBandsProcessorTest {
 
         // Band 0: Login items
         String band0 = "ld({" +
-                "\"UUID1\": " + createMockItem("Login", "Google", "https://google.com", "{\"fields\":[{\"name\":\"username\",\"value\":\"mark@gmail.com\"},{\"name\":\"password\",\"value\":\"p4ssw0rd\"}]}", vaultMasterKey, vaultOverviewKey) + "," +
-                "\"UUID2\": " + createMockItem("Login", "GitHub", "https://github.com", "{\"fields\":[{\"name\":\"username\",\"value\":\"mvasey\"},{\"name\":\"password\",\"value\":\"git-pass\"}]}", vaultMasterKey, vaultOverviewKey) +
+                "\"UUID1\": " + createMockItem("001", "Google", "https://google.com", "{\"fields\":[{\"name\":\"username\",\"value\":\"mark@gmail.com\"},{\"name\":\"password\",\"value\":\"p4ssw0rd\"}]}", vaultMasterKey, vaultOverviewKey) + "," +
+                "\"UUID2\": " + createMockItem("001", "GitHub", "https://github.com", "{\"fields\":[{\"name\":\"username\",\"value\":\"mvasey\"},{\"name\":\"password\",\"value\":\"git-pass\"}]}", vaultMasterKey, vaultOverviewKey) +
                 "});";
         Files.writeString(defaultDir.resolve("band_0.js"), band0);
 
         // Band 1: Secure Notes
         String band1 = "ld({" +
-                "\"UUID3\": " + createMockItem("Secure Note", "Secret Code", null, "{\"notesPlain\":\"The code is 42.\"}", vaultMasterKey, vaultOverviewKey) +
+                "\"UUID3\": " + createMockItem("003", "Secret Code", null, "{\"notesPlain\":\"The code is 42.\"}", vaultMasterKey, vaultOverviewKey) +
                 "});";
         Files.writeString(defaultDir.resolve("band_1.js"), band1);
 
-        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey));
+        // Test with null search string (all should be displayed)
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, null));
+        
+        // Test with search string "GitHub" (only GitHub should be displayed)
+        assertDoesNotThrow(() -> VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, "GitHub"));
     }
 
     private String createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {
-        // 1. Overview 'o'
         String overviewJson = "{\"title\":\"" + title + "\"" + (url != null ? ",\"url\":\"" + url + "\"" : "") + "}";
         String encryptedO = Base64.getEncoder().encodeToString(encryptOpData(overviewJson, vOverviewKey));
 
-        // 2. Item Key 'k'
         byte[] itemKeys = new byte[64];
         Arrays.fill(itemKeys, (byte) 0x33);
         String encryptedK = Base64.getEncoder().encodeToString(encryptItemKey(itemKeys, vMasterKey));
 
-        // 3. Details 'd'
         String encryptedD = Base64.getEncoder().encodeToString(encryptOpData(detailsJson, itemKeys));
 
         return "{" +
