@@ -1,6 +1,5 @@
 package org.example.onepassword.processors;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.onepassword.dataClasses.VaultProfile;
 
