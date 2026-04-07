@@ -24,9 +24,15 @@ public class DisplayProcessor {
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey) {
 
+        int itemCounter = 0;
         for (VaultItem item : items.values()) {
             try {
                 if (item.getO() == null) continue;
+
+                itemCounter++;
+
+                System.out.println("VaultItem: " + itemCounter);
+                System.out.println();
 
                 String categoryNameText = item.getCategory() == null ? "" : item.getCategory() + " - ";
 
@@ -74,23 +80,27 @@ public class DisplayProcessor {
                                 countFields++;
                             }
                         }
+                        System.out.println();
                         if (details.getPassword() != null && !details.getPassword().isEmpty()) {
-                            System.out.println("Password: " + details.getPassword());
+                            System.out.println("P assword: " + details.getPassword());
                         }
                         if (details.getNumber() != null && !details.getNumber().isEmpty()) {
-                            System.out.println("Number: " + details.getNumber());
+                            System.out.println(" Number: " + details.getNumber());
                         }
                         if (details.getMembership_no() != null && !details.getMembership_no().isEmpty()) {
-                            System.out.println("Membership No.: " + details.getMembership_no());
+                            System.out.println(" Membership No.: " + details.getMembership_no());
                         }
                         if (details.getNotesPlain() != null && !details.getNotesPlain().isEmpty()) {
-                            System.out.println("Notes: " + details.getNotesPlain());
+                            System.out.println(" Notes: " + details.getNotesPlain());
                         }
                     } catch (Exception e) {
                         System.out.println("  Failed to decrypt details: " + e.getMessage());
                     }
                 }
                 System.out.println();
+                System.out.println("------------------------------------------------------------------");
+                System.out.println();
+
             } catch (Exception e) {
                 System.out.println("Failed to read item " + item.getUuid() + ": " + e.getMessage());
             }
