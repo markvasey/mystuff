@@ -40,5 +40,6 @@ public class VaultBandsProcessor {
                 }
             }
         }
+        DisplayProcessor.PrintTotals();
     }
 }

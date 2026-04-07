@@ -32,9 +32,14 @@ public class DisplayProcessor {
         return countFields;
     }
 
+
     public static void resetCounters() {
         countTitles = 0;
         countFields = 0;
+    }
+
+    public static void PrintTotals() {
+        System.out.println("Totals Titles: " + countTitles + ", Fields: " + countFields);
     }
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
@@ -43,7 +48,6 @@ public class DisplayProcessor {
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, List<String> searchTerms) {
 
-        int itemCounter = 0;
         for (VaultItem item : items.values()) {
             try {
                 if (item.getO() == null) continue;
@@ -67,9 +71,8 @@ public class DisplayProcessor {
                     if (!match) continue;
                 }
 
-                itemCounter++;
-
-                System.out.println("VaultItem: " + itemCounter);
+                countTitles++;
+                System.out.println("VaultItem: " + countTitles);
                 System.out.println();
 
                 String categoryNameText = item.getCategory() == null ? "" : item.getCategory() + " - ";
@@ -77,7 +80,6 @@ public class DisplayProcessor {
                 String urlText = overview.getUrl() == null ? "" : ", URL: " + overview.getUrl();
 
                 System.out.println(categoryNameText + "Title: " + title + urlText);
-                countTitles++;
 
                 // 2. Decrypt Details
                 if (item.getD() != null && item.getK() != null) {
@@ -92,7 +94,7 @@ public class DisplayProcessor {
                         if (details.getFields() != null) {
                             for (ItemField field : details.getFields()) {
                                 String idText = field.getId() == null ? "" : "[Id: " + field.getId() + "] ";
-                                System.out.print(idText + field.getName() + " = " + field.getValue());
+                                System.out.print("  " + idText + field.getName() + " = " + field.getValue());
 
                                 String type = field.getType() == null ? "" : "Type: " + field.getType();
                                 String designation = field.getDesignation() == null ? "" : "Designation: " + field.getDesignation();
@@ -107,24 +109,23 @@ public class DisplayProcessor {
                                     if (!designation.isEmpty()) {
                                         System.out.print(designation);
                                     }
-                                    System.out.println(")");
+                                    System.out.print(")");
                                 }
-
+                                System.out.println();
                                 countFields++;
                             }
                         }
-                        System.out.println();
                         if (details.getPassword() != null && !details.getPassword().isEmpty()) {
-                            System.out.println("P assword: " + details.getPassword());
+                            System.out.println("  Password: " + details.getPassword());
                         }
                         if (details.getNumber() != null && !details.getNumber().isEmpty()) {
-                            System.out.println(" Number: " + details.getNumber());
+                            System.out.println("  Number: " + details.getNumber());
                         }
                         if (details.getMembership_no() != null && !details.getMembership_no().isEmpty()) {
-                            System.out.println(" Membership No.: " + details.getMembership_no());
+                            System.out.println("  Membership No.: " + details.getMembership_no());
                         }
                         if (details.getNotesPlain() != null && !details.getNotesPlain().isEmpty()) {
-                            System.out.println(" Notes: " + details.getNotesPlain());
+                            System.out.println("  Notes: " + details.getNotesPlain());
                         }
                     } catch (Exception e) {
                         System.out.println("  Failed to decrypt details: " + e.getMessage());
@@ -138,8 +139,5 @@ public class DisplayProcessor {
                 System.out.println("Failed to read item " + item.getUuid() + ": " + e.getMessage());
             }
         }
-
-        System.out.println("Totals Titles: " + countTitles + ", Fields: " + countFields);
-
     }
 }
