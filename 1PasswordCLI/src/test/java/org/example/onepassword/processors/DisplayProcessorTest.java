@@ -1,7 +1,7 @@
 package org.example.onepassword.processors;
 
-import org.example.onepassword.OpVaultDecryptor;
 import org.example.onepassword.dataClasses.VaultItem;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.Cipher;
@@ -16,66 +16,82 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.*;
 
 class DisplayProcessorTest {
 
-    @Test
-    void testDisplayResultsRealistic() throws Exception {
-        byte[] vaultMasterKey = new byte[64];
+    private byte[] vaultMasterKey;
+    private byte[] vaultOverviewKey;
+    private Map<String, VaultItem> testItems;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        DisplayProcessor.resetCounters();
+        vaultMasterKey = new byte[64];
         Arrays.fill(vaultMasterKey, (byte) 0x11);
-        byte[] vaultOverviewKey = new byte[64];
+        vaultOverviewKey = new byte[64];
         Arrays.fill(vaultOverviewKey, (byte) 0x22);
 
-        Map<String, VaultItem> items = new HashMap<>();
-
-        // 1. Login item
-        items.put("UUID1", createMockItem("001", "My Login", "https://site.com", 
-            "{\"fields\":[{\"name\":\"username\",\"value\":\"user1\",\"type\":\"T\"},{\"name\":\"password\",\"value\":\"pass1\",\"type\":\"P\",\"designation\":\"password\"}]}", 
+        testItems = new HashMap<>();
+        // 1. Login item (2 fields)
+        testItems.put("UUID1", createMockItem("001", "Google Login", "https://google.com", 
+            "{\"fields\":[{\"name\":\"username\",\"value\":\"user1\"},{\"name\":\"password\",\"value\":\"pass1\"}]}", 
             vaultMasterKey, vaultOverviewKey));
 
-        // 2. Credit Card
-        items.put("UUID2", createMockItem("002", "My Visa", null, 
+        // 2. Credit Card (1 field + number)
+        testItems.put("UUID2", createMockItem("002", "My Visa Card", null, 
             "{\"fields\":[{\"name\":\"cardholder\",\"value\":\"Mark\"}], \"number\":\"1234-5678\"}", 
             vaultMasterKey, vaultOverviewKey));
 
-        // 3. Secure Note
-        items.put("UUID3", createMockItem("003", "Top Secret", null, 
-            "{\"notesPlain\":\"Keep it secret, keep it safe.\"}", 
+        // 3. Secure Note (0 fields, has notesPlain)
+        testItems.put("UUID3", createMockItem("003", "Private Note", null, 
+            "{\"notesPlain\":\"Secret stuff\"}", 
             vaultMasterKey, vaultOverviewKey));
+    }
 
-        // 4. Membership
-        items.put("UUID4", createMockItem("105", "Costco", null, 
-            "{\"membership_no\":\"999888\"}", 
-            vaultMasterKey, vaultOverviewKey));
+    @Test
+    void testDisplayResultsAll() {
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, null);
+        assertEquals(3, DisplayProcessor.getCountTitles());
+        assertEquals(3, DisplayProcessor.getCountFields());
+    }
 
-        // 5. Item with null Overview (should be skipped)
-        VaultItem nullO = new VaultItem();
-        nullO.setUuid("UUID5");
-        items.put("UUID5", nullO);
+    @Test
+    void testDisplayResultsBlankSearch() {
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "  ");
+        assertEquals(3, DisplayProcessor.getCountTitles());
+        assertEquals(3, DisplayProcessor.getCountFields());
+    }
 
-        // 6. Item with invalid decryption (should be caught and logged)
-        VaultItem invalidD = createMockItem("001", "Invalid Item", null, "{}", vaultMasterKey, vaultOverviewKey);
-        invalidD.setD("not-base64-garbage!!!");
-        items.put("UUID6", invalidD);
+    @Test
+    void testDisplayResultsSearchGoogle() {
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "Google");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+        assertEquals(2, DisplayProcessor.getCountFields());
+    }
 
-        assertDoesNotThrow(() -> DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey, null));
-        
-        // Additional test for search filtering
-        assertDoesNotThrow(() -> DisplayProcessor.DisplayResults(items, vaultMasterKey, vaultOverviewKey, "Visa"));
+    @Test
+    void testDisplayResultsSearchCaseInsensitive() {
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "visa");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+        assertEquals(1, DisplayProcessor.getCountFields());
+    }
+
+    @Test
+    void testDisplayResultsSearchNoMatch() {
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "Amazon");
+        assertEquals(0, DisplayProcessor.getCountTitles());
+        assertEquals(0, DisplayProcessor.getCountFields());
     }
 
     private VaultItem createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {
-        // 1. Overview 'o'
         String overviewJson = "{\"title\":\"" + title + "\"" + (url != null ? ",\"url\":\"" + url + "\"" : "") + "}";
         String encryptedO = Base64.getEncoder().encodeToString(encryptOpData(overviewJson, vOverviewKey));
 
-        // 2. Item Key 'k'
         byte[] itemKeys = new byte[64];
         Arrays.fill(itemKeys, (byte) 0x33);
         String encryptedK = Base64.getEncoder().encodeToString(encryptItemKey(itemKeys, vMasterKey));
 
-        // 3. Details 'd'
         String encryptedD = Base64.getEncoder().encodeToString(encryptOpData(detailsJson, itemKeys));
 
         VaultItem item = new VaultItem();

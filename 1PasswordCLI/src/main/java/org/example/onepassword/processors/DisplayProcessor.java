@@ -22,6 +22,19 @@ public class DisplayProcessor {
         countFields = 0;
     }
 
+    public static int getCountTitles() {
+        return countTitles;
+    }
+
+    public static int getCountFields() {
+        return countFields;
+    }
+
+    public static void resetCounters() {
+        countTitles = 0;
+        countFields = 0;
+    }
+
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
 
         int itemCounter = 0;
