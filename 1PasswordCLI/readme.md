@@ -104,6 +104,53 @@ Contains POJOs (Plain Old Java Objects) used by Jackson to map the JSON structur
 
 ---
 
+## Example Walkthrough
+
+To see how the math actually works, let's follow a single item from the test data through the decryption process.
+
+### 1. The Inputs (from `profile.js`)
+*   **Master Password**: `test-password`
+*   **Salt**: `YmFzZTY0LXNhbHQ=` (Base64 for "base64-salt")
+*   **Iterations**: `1000`
+
+### 2. Deriving the Master Unlock Key
+The program calls `OpVaultDecryptor.deriveKeys()`. Using PBKDF2-HMAC-SHA512, it calculates a 64-byte key. 
+- **First 32 bytes**: Used for AES decryption of the Master Keys.
+- **Last 32 bytes**: Used for HMAC integrity verification of the Master Keys.
+
+### 3. Unlocking the Vault Master Key
+In `profile.js`, the `masterKey` field might look like a Base64 string.
+1.  We verify the HMAC of the `masterKey` blob using the last 32 bytes of our **Master Unlock Key**.
+2.  We decrypt the ciphertext using the first 32 bytes of our **Master Unlock Key**.
+3.  We hash the resulting 64 bytes using **SHA-512** to get our final **Vault Master Key**.
+
+### 4. Decrypting an Item (from `band_X.js`)
+Imagine we find an item with these fields:
+*   **`k` (Encrypted Item Keys)**: A blob containing a unique key for this item.
+*   **`d` (Encrypted Details)**: An `opdata01` container with the password data.
+
+#### Step A: Decrypt the `k` field
+1.  We take our **Vault Master Key**.
+2.  We verify and decrypt the `k` blob.
+3.  This reveals the **Item Key** (64 bytes unique to this item).
+
+#### Step B: Decrypt the `d` field
+1.  We take the **Item Key** from Step A.
+2.  We verify the HMAC signature at the end of the `d` blob.
+3.  We use the IV (bytes 16-31) and the Item Key to decrypt the ciphertext.
+4.  **Result**: The JSON string:
+    `{"fields":[{"name":"username","value":"markvasey"},{"name":"password","value":"correct-horse-battery-staple"}]}`
+
+### 5. Final Display
+The `DisplayProcessor` parses this JSON and prints:
+```text
+Title: My Bank Login
+  username = markvasey
+  Password: correct-horse-battery-staple
+```
+
+---
+
 ## Introduction to Cryptography
 
 To understand how 1Password secures your data, it's helpful to understand the basic building blocks of modern cryptography 
