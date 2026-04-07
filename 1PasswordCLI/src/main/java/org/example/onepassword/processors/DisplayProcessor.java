@@ -6,9 +6,14 @@ import org.example.onepassword.dataClasses.ItemDetails;
 import org.example.onepassword.dataClasses.ItemField;
 import org.example.onepassword.dataClasses.ItemOverview;
 import org.example.onepassword.dataClasses.VaultItem;
+import org.example.onepassword.utils.Utils;
 
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DisplayProcessor {
 
@@ -37,6 +42,8 @@ public class DisplayProcessor {
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
 
+        List<String> searchTerms = parseSearchString(searchString);
+
         int itemCounter = 0;
         for (VaultItem item : items.values()) {
             try {
@@ -48,10 +55,17 @@ public class DisplayProcessor {
                 ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
                 String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
 
-                // Filter by search string
-                if (searchString != null && !searchString.isBlank() &&
-                        !title.toLowerCase().contains(searchString.toLowerCase())) {
-                        continue;
+                // Filter by search terms (OR logic)
+                if (!searchTerms.isEmpty()) {
+                    boolean match = false;
+                    String lowerTitle = title.toLowerCase();
+                    for (String term : searchTerms) {
+                        if (lowerTitle.contains(term.toLowerCase())) {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (!match) continue;
                 }
 
                 itemCounter++;
@@ -128,5 +142,27 @@ public class DisplayProcessor {
 
         System.out.println("Totals Titles: " + countTitles + ", Fields: " + countFields);
 
+    }
+
+    private static List<String> parseSearchString(String searchString) {
+        List<String> terms = new ArrayList<>();
+        if (searchString == null || searchString.isBlank()) {
+            return terms;
+        }
+
+        // Regex to match "quoted phrases" or individual words
+        Pattern pattern = Pattern.compile("\"([^\"]*)\"|(\\S+)");
+        Matcher matcher = pattern.matcher(searchString);
+
+        while (matcher.find()) {
+            if (matcher.group(1) != null) {
+                // Quoted phrase
+                terms.add(matcher.group(1));
+            } else {
+                // Individual word
+                terms.add(matcher.group(2));
+            }
+        }
+        return terms;
     }
 }

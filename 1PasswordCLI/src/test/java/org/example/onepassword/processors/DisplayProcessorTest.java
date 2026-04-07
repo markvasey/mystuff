@@ -84,6 +84,30 @@ class DisplayProcessorTest {
         assertEquals(0, DisplayProcessor.getCountFields());
     }
 
+    @Test
+    void testDisplayResultsSearchMultipleWords() {
+        // "Google Card" should match UUID1 (Google) and UUID2 (Visa Card)
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "Google Card");
+        assertEquals(2, DisplayProcessor.getCountTitles());
+        assertEquals(3, DisplayProcessor.getCountFields());
+    }
+
+    @Test
+    void testDisplayResultsSearchQuotedPhrase() {
+        // "\"Google Login\"" should only match UUID1
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "\"Google Login\"");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+        assertEquals(2, DisplayProcessor.getCountFields());
+    }
+
+    @Test
+    void testDisplayResultsSearchQuotedAndUnquoted() {
+        // "\"Private Note\" Google" should match UUID3 and UUID1
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, "\"Private Note\" Google");
+        assertEquals(2, DisplayProcessor.getCountTitles());
+        assertEquals(2, DisplayProcessor.getCountFields());
+    }
+
     private VaultItem createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {
         String overviewJson = "{\"title\":\"" + title + "\"" + (url != null ? ",\"url\":\"" + url + "\"" : "") + "}";
         String encryptedO = Base64.getEncoder().encodeToString(encryptOpData(overviewJson, vOverviewKey));
