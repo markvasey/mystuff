@@ -22,6 +22,14 @@ Most sensitive data in an OpVault is stored in a container format called `opdata
 4.  **Ciphertext (Variable)**: The actual data encrypted with AES-256-CBC.
 5.  **HMAC (32 bytes)**: A SHA-256 signature of the previous components to ensure the data hasn't been tampered with.
 
+### The `k` Field Structure (Item Keys)
+The `k` field contains the encrypted keys for a specific vault item. It has a slightly simpler structure than the `opdata01` container:
+1.  **Initialization Vector (IV) (16 bytes)**: Random data used to start the AES decryption.
+2.  **Ciphertext (Variable)**: The encrypted item keys (typically 64 bytes).
+3.  **HMAC (32 bytes)**: A SHA-256 signature of the IV and Ciphertext to ensure integrity.
+
+This structure is used to securely store the 64-byte key required to decrypt the item's details (`d` field).
+
 ---
 
 ## Decryption Process
