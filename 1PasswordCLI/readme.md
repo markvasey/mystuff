@@ -104,6 +104,52 @@ Contains POJOs (Plain Old Java Objects) used by Jackson to map the JSON structur
 
 ---
 
+## Introduction to Cryptography
+
+To understand how 1Password secures your data, it's helpful to understand the basic building blocks of modern cryptography 
+used in this application.
+
+### AES (Advanced Encryption Standard)
+AES is the industry-standard algorithm for encrypting data. It is a **Symmetric** cipher, meaning the same key is used to 
+both encrypt and decrypt the data.
+- **AES-256**: This application uses the strongest version (256-bit keys).
+- **CBC (Cipher Block Chaining)**: A "mode" of operation where each block of plaintext is combined with the previous ciphertext block 
+- before being encrypted. This ensures that identical blocks of text don't result in identical ciphertext.
+
+### SHA (Secure Hash Algorithm)
+A "Hash" is a one-way digital fingerprint. You can turn any data into a hash, but you cannot turn a hash back into the original data.
+- **SHA-256 / SHA-512**: These produce 32-byte and 64-byte fingerprints, respectively.
+- **Usage**: Used to verify data integrity and to "stretch" short passwords into long, complex cryptographic keys.
+
+### HMAC (Hash-based Message Authentication Code)
+An HMAC is like a signature for a piece of data. It uses a secret key and a hash function (like SHA-256) to prove that a file or message 
+has not been altered by anyone who doesn't know the key. If even a single bit of the data is changed, the HMAC will no longer match.
+
+### Salt
+A **Salt** is a random string of data added to your password before it is hashed.
+- **Purpose**: Without a salt, two people with the same password would have the same "Master Key." 
+- This would make it easier for hackers to use "Rainbow Tables" (pre-computed lists of common password hashes) to steal data. 
+- A unique salt ensures that every vault is cryptographically unique, even if the passwords are the same.
+
+### IV (Initialization Vector)
+An **IV** is a random block of data used to start the AES-CBC encryption process.
+- **Purpose**: It ensures that if you encrypt the same piece of data twice with the same key, the resulting ciphertext will be completely 
+- different each time. The IV does not need to be secret (it is stored in plain sight in the `opdata01` container), but it must be unique 
+- for every encryption operation.
+
+### Ciphertext vs. Plaintext
+- **Plaintext**: The original, readable data (like your actual password or a JSON string).
+- **Ciphertext**: The "scrambled" version of the data produced after encryption. Without the correct key and IV, ciphertext looks like 
+- random noise.
+
+### Key Derivation & Iterations
+Since humans use short, memorable passwords and computers need long, random keys, we use **PBKDF2** (Password-Based Key Derivation Function 2).
+- **Iterations**: This is the number of times the hashing process is repeated (e.g., 100,000 times). 
+- By forcing the computer to do thousands of calculations, we make it much slower and more expensive for an attacker to 
+- try and "guess" your password.
+
+---
+
 ## References & Credits
 
 - [1Password OpVault Documentation](https://support.1password.com/cs/opvault-design/) - Official design specification.
