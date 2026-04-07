@@ -1,6 +1,5 @@
 package org.example.onepassword;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.onepassword.dataClasses.*;
 import org.example.onepassword.processors.VaultBandsProcessor;
 import org.example.onepassword.processors.VaultKeysProcessor;
@@ -16,8 +15,6 @@ import java.util.Scanner;
 
 @SpringBootApplication
 public class OnePasswordCliApplication implements CommandLineRunner {
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public static void main(String[] args) {
         SpringApplication.run(OnePasswordCliApplication.class, args);
