@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.InputStream;
+import java.util.Properties;
 
 public class ControlPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(ControlPanel.class);
@@ -23,6 +25,8 @@ public class ControlPanel extends JPanel {
     public ControlPanel(VideoPanel videoPanel) {
         this.videoPanel = videoPanel;
         setLayout(new BorderLayout());
+
+        loadSecrets();
 
         JPanel settingsPanel = new JPanel(new GridLayout(4, 2));
         settingsPanel.add(new JLabel("IP:"));
@@ -65,6 +69,22 @@ public class ControlPanel extends JPanel {
         rightBtn.addActionListener(e -> move(PtzType.RIGHT));
         zoomInBtn.addActionListener(e -> move(PtzType.ZOOM_IN));
         zoomOutBtn.addActionListener(e -> move(PtzType.ZOOM_OUT));
+    }
+
+    private void loadSecrets() {
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("secret.txt")) {
+            if (input == null) {
+                logger.warn("secret.txt not found in resources");
+                return;
+            }
+            Properties prop = new Properties();
+            prop.load(input);
+            userField.setText(prop.getProperty("username", ""));
+            passField.setText(prop.getProperty("password", ""));
+            logger.info("Loaded credentials from secret.txt");
+        } catch (Exception ex) {
+            logger.error("Error loading secret.txt", ex);
+        }
     }
 
     private void connect() {
