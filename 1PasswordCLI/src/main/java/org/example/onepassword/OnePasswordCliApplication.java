@@ -5,6 +5,7 @@ import org.example.onepassword.dataClasses.*;
 import org.example.onepassword.processors.VaultBandsProcessor;
 import org.example.onepassword.processors.VaultKeysProcessor;
 import org.example.onepassword.processors.VaultProfileProcessor;
+import org.example.onepassword.utils.VaultPathUtils;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -30,37 +31,10 @@ public class OnePasswordCliApplication implements CommandLineRunner {
     public void run(String... args) {
         System.out.println("--- 1Password OPVault Reader ---");
 
-        String vaultPathStr = "1Password.opvault";
-        if (args.length > 0) {
-            vaultPathStr = args[0];
-        }
+        Path vaultPath = VaultPathUtils.getVaultPath(args);
+        Path profilePath = VaultPathUtils.getProfilePath(vaultPath);
 
-        Path vaultPath = Paths.get(vaultPathStr);
-        if (!Files.exists(vaultPath)) {
-            vaultPath = Paths.get("1PasswordCLI", vaultPathStr);
-        }
-
-        if (!Files.exists(vaultPath)) {
-            System.err.println("Vault not found at: " + vaultPath.toAbsolutePath());
-            return;
-        }
-
-        Path profilePath = vaultPath.resolve("default/profile.js");
-        if (!Files.exists(profilePath)) {
-            System.err.println("Profile not found at: " + profilePath.toAbsolutePath());
-            return;
-        }
-
-        String password;
-        Console console = System.console();
-        if (console != null) {
-            char[] passwordChars = console.readPassword("Enter Master Password: ");
-            password = new String(passwordChars);
-        } else {
-            System.out.print("Enter Master Password: ");
-            Scanner scanner = new Scanner(System.in);
-            password = scanner.nextLine();
-        }
+        String password = PromptForPassword();
 
         try {
             //Process Profile
@@ -77,5 +51,19 @@ public class OnePasswordCliApplication implements CommandLineRunner {
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
         }
+    }
+
+    private String PromptForPassword() {
+        String password;
+        Console console = System.console();
+        if (console != null) {
+            char[] passwordChars = console.readPassword("Enter Master Password: ");
+            password = new String(passwordChars);
+        } else {
+            System.out.print("Enter Master Password: ");
+            Scanner scanner = new Scanner(System.in);
+            password = scanner.nextLine();
+        }
+        return password;
     }
 }
