@@ -1,20 +1,20 @@
 package org.example.onepassword;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.onepassword.dataClasses.*;
+import org.example.onepassword.processors.VaultBandsProcessor;
+import org.example.onepassword.processors.VaultKeysProcessor;
+import org.example.onepassword.processors.VaultProfileProcessor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.io.Console;
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
-import java.util.Map;
 import java.util.Scanner;
 
 @SpringBootApplication
@@ -63,132 +63,17 @@ public class OnePasswordCliApplication implements CommandLineRunner {
         }
 
         try {
-            String profileJs = Files.readString(profilePath, StandardCharsets.UTF_8);
-            int startIdx = profileJs.indexOf("{");
-            int endIdx = profileJs.lastIndexOf("}");
-            if (startIdx == -1 || endIdx == -1) {
-                System.err.println("Invalid profile.js format");
-                return;
-            }
-            String profileJson = profileJs.substring(startIdx, endIdx + 1);
-            //System.out.println("profileJson: " + profileJson);
+            //Process Profile
+            VaultProfileProcessor.ProcessVaultProfile(profilePath);
+            VaultProfile profile = VaultProfileProcessor.getVaultProfile();
 
-            VaultProfile profile = objectMapper.readValue(profileJson, VaultProfile.class);
+            //Derive Master Keys
+            VaultKeysProcessor.UnlockKeys(password, profile);
+            byte[] vaultMasterKey = VaultKeysProcessor.getVaultMasterKey();
+            byte[] vaultOverviewKey =  VaultKeysProcessor.getVaultOverviewKey();
 
-            System.out.println("Profile: " + profile.getProfileName() + ", Updated By: " + profile.getLastUpdatedBy() + ", Updated At: " + profile.getUpdatedAt());
-
-            System.out.println("Deriving keys...");
-            byte[] masterUnlockKey = OpVaultDecryptor.deriveKeys(password, profile.getSalt(), profile.getIterations());
-
-            byte[] masterKeyData = Base64.getDecoder().decode(profile.getMasterKey());
-            byte[] overviewKeyData = Base64.getDecoder().decode(profile.getOverviewKey());
-
-            byte[] vaultMasterKeyRaw = OpVaultDecryptor.decryptOpData(masterKeyData, masterUnlockKey);
-            byte[] vaultOverviewKeyRaw = OpVaultDecryptor.decryptOpData(overviewKeyData, masterUnlockKey);
-
-            java.security.MessageDigest sha512 = java.security.MessageDigest.getInstance("SHA-512");
-            byte[] vaultMasterKey = sha512.digest(vaultMasterKeyRaw);
-            byte[] vaultOverviewKey = sha512.digest(vaultOverviewKeyRaw);
-
-            System.out.println("Vault unlocked successfully!\n");
-
-            File defaultDir = vaultPath.resolve("default").toFile();
-            File[] bandFiles = defaultDir.listFiles((_, name) -> name.startsWith("band_") && name.endsWith(".js"));
-
-            if (bandFiles != null) {
-                int countTitles = 0;
-                int countFields = 0;
-                for (File bandFile : bandFiles) {
-                    if (bandFile.getName().contains("conflicted copy")) continue;
-                    
-                    try {
-                        String bandJs = Files.readString(bandFile.toPath(), StandardCharsets.UTF_8);
-                        int start = bandJs.indexOf("{");
-                        int end = bandJs.lastIndexOf("}");
-                        if (start == -1 || end == -1) continue;
-                        
-                        String bandJson = bandJs.substring(start, end + 1);
-                        Map<String, VaultItem> items = objectMapper.readValue(bandJson, new TypeReference<>() {
-                        });
-
-                        for (VaultItem item : items.values()) {
-                            try {
-                                if (item.getO() == null) continue;
-
-                                String categoryNameText = item.getCategory() == null ? "" : item.getCategory() + " - ";
-
-                                // 1. Decrypt Overview
-                                byte[] overviewData = Base64.getDecoder().decode(item.getO());
-                                byte[] decryptedOverview = OpVaultDecryptor.decryptOpData(overviewData, vaultOverviewKey);
-                                ItemOverview overview = objectMapper.readValue(decryptedOverview, ItemOverview.class);
-                                String title = overview.getTitle() != null ? overview.getTitle() : "No Title";
-                                String urlText = overview.getUrl() == null ? "" : ", URL: " + overview.getUrl();
-
-                                System.out.println(categoryNameText + "Title: " + title + urlText);
-                                countTitles++;
-
-                                // 2. Decrypt Details
-                                if (item.getD() != null && item.getK() != null) {
-                                    byte[] encryptedK = Base64.getDecoder().decode(item.getK());
-                                    byte[] encryptedD = Base64.getDecoder().decode(item.getD());
-
-                                    try {
-                                        String decryptedDetailsJson = OpVaultDecryptor.decryptItems(encryptedK, encryptedD, vaultMasterKey);
-                                        System.out.println("Decrypted: " + decryptedDetailsJson);
-                                        ItemDetails details = objectMapper.readValue(decryptedDetailsJson, ItemDetails.class);
-
-                                        if (details.getFields() != null) {
-                                            for (ItemField field : details.getFields()) {
-                                                String idText = field.getId() == null ? "" : "[Id: " + field.getId() + "] ";
-                                                System.out.print(idText + field.getName() + " = " + field.getValue());
-
-                                                String type = field.getType() == null ? "" : "Type: " + field.getType();
-                                                String designation = field.getDesignation() == null ? "" : "Designation: " + field.getDesignation();
-                                                if (!type.isEmpty() || !designation.isEmpty()) {
-                                                    System.out.print(" (");
-                                                    if (!type.isEmpty()) {
-                                                        System.out.print(type);
-                                                    }
-                                                    if (!type.isEmpty() && !designation.isEmpty()) {
-                                                        System.out.print(", ");
-                                                    }
-                                                    if (!designation.isEmpty()) {
-                                                        System.out.print(designation);
-                                                    }
-                                                    System.out.println(")");
-                                                }
-
-                                                countFields++;
-                                            }
-                                        }
-                                        if (details.getPassword() != null && !details.getPassword().isEmpty()) {
-                                            System.out.println("Password: " + details.getPassword());
-                                        }
-                                        if (details.getNumber() != null && !details.getNumber().isEmpty()) {
-                                            System.out.println("Number: " + details.getNumber());
-                                        }
-                                        if (details.getMembership_no() != null && !details.getMembership_no().isEmpty()) {
-                                            System.out.println("Membership No.: " + details.getMembership_no());
-                                        }
-                                        if (details.getNotesPlain() != null && !details.getNotesPlain().isEmpty()) {
-                                            System.out.println("Notes: " + details.getNotesPlain());
-                                        }
-                                    } catch (Exception e) {
-                                        System.out.println("  Failed to decrypt details: " + e.getMessage());
-                                    }
-                                }
-                                System.out.println();
-                            } catch (Exception e) {
-                                System.out.println("Failed to read item " + item.getUuid() + ": " + e.getMessage());
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Skip unparseable band files
-                    }
-                }
-                System.out.println("Totals Titles: " + countTitles + ", Fields: " + countFields);
-            }
-
+            //Process Bands
+            VaultBandsProcessor.ProcessVault(vaultPath,vaultMasterKey,vaultOverviewKey);
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
         }
