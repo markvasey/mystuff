@@ -72,6 +72,8 @@ cd TapoViewer
 export JAVA_HOME=/home/markvasey/.jdks/openjdk-23.0.1
 export PATH=$JAVA_HOME/bin:$PATH
 ./mvnw clean compile exec:java -Dexec.mainClass="com.tapoviewer.TapoViewerApp"
+  or, wit logging:
+./mvnw clean compile exec:java -Dexec.mainClass="com.tapoviewer.TapoViewerApp" -Dslf4j.simpleLogger.defaultLogLevel=info
 ```
 
 ## Privacy & Data Handling
