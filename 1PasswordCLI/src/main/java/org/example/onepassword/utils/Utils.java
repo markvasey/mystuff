@@ -1,6 +1,10 @@
 package org.example.onepassword.utils;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Utils {
 
@@ -29,5 +33,27 @@ public class Utils {
 
     public static String getCategoryName(String categoryCode) {
         return categories.get(categoryCode);
+    }
+
+    public static List<String> parseSearchString(String searchString) {
+        List<String> terms = new ArrayList<>();
+        if (searchString == null || searchString.isBlank()) {
+            return terms;
+        }
+
+        // Regex to match "quoted phrases" or individual words
+        Pattern pattern = Pattern.compile("\"([^\"]*)\"|(\\S+)");
+        Matcher matcher = pattern.matcher(searchString);
+
+        while (matcher.find()) {
+            if (matcher.group(1) != null) {
+                // Quoted phrase
+                terms.add(matcher.group(1));
+            } else {
+                // Individual word
+                terms.add(matcher.group(2));
+            }
+        }
+        return terms;
     }
 }

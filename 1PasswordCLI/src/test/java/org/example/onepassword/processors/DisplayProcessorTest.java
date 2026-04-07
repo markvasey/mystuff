@@ -51,7 +51,7 @@ class DisplayProcessorTest {
 
     @Test
     void testDisplayResultsAll() {
-        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, null);
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null);
         assertEquals(3, DisplayProcessor.getCountTitles());
         assertEquals(3, DisplayProcessor.getCountFields());
     }
