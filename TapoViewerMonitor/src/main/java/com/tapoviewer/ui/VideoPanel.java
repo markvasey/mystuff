@@ -1,5 +1,6 @@
 package com.tapoviewer.ui;
 
+import org.bytedeco.ffmpeg.global.avutil;
 import org.bytedeco.javacv.CanvasFrame;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
@@ -49,6 +50,9 @@ public class VideoPanel extends JPanel {
 
     public void play(String ip, int port, String stream, String username, String password) {
         stop(); // Ensure any previous stream is stopped
+
+        // Suppress FFmpeg noise (including the swscaler deprecated pixel format warning)
+        org.bytedeco.ffmpeg.global.avutil.av_log_set_level(org.bytedeco.ffmpeg.global.avutil.AV_LOG_ERROR);
 
         String mrl = String.format("rtsp://%s:%s@%s:%d/%s", username, password, ip, port, stream);
         logger.info("Connecting to RTSP via JavaCV: rtsp://{}:****@{}:{}/{}", username, ip, port, stream);
