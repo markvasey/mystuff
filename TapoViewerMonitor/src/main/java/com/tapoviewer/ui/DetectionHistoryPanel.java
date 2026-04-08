@@ -4,8 +4,10 @@ import com.tapoviewer.model.PersonSnapshot;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 public class DetectionHistoryPanel extends JPanel {
     private final DefaultComboBoxModel<PersonSnapshot> model = new DefaultComboBoxModel<>();
@@ -36,9 +38,21 @@ public class DetectionHistoryPanel extends JPanel {
         setBorder(BorderFactory.createTitledBorder("Recent Detections (Last 20)"));
 
         snapshotCombo.addActionListener(e -> imageDisplay.repaint());
+        
+        // Ensure combo box handles arrow keys and repaints
+        snapshotCombo.setFocusable(true);
+
+        // Clicking the image display should focus the combo for arrow key navigation
+        imageDisplay.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                snapshotCombo.requestFocusInWindow();
+            }
+        });
 
         add(snapshotCombo, BorderLayout.NORTH);
         imageDisplay.setPreferredSize(new Dimension(200, 200));
+        imageDisplay.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         add(imageDisplay, BorderLayout.CENTER);
     }
 
