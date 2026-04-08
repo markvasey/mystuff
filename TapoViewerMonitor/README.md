@@ -57,6 +57,15 @@ Orchestrates the ONVIF protocol.
 ### `com.tapoviewer.model.CameraSettings`
 A simple data model that holds the camera's IP, ports, and credentials. It includes helper methods to construct the RTSP URL.
 
+## Seizure parameters
+
+TrackedPerson
+- HISTORY_SIZE
+- MIN_SEIZURE_MOTION
+  - analyzeSeizure
+    - val > mean * 1.35 && !above
+    - seizureDetected = (peaks >= 1 && peaks <= 5);
+
 ## Configuration Files
 
 ### `src/main/resources/cameras.xml`
