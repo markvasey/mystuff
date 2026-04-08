@@ -8,8 +8,12 @@ public class TrackedPerson {
     private Rectangle bounds;
     private Mat lastGrayRegion;
     private final LinkedList<Double> motionHistory = new LinkedList<>();
-    private static final int HISTORY_SIZE = 40; // Approx 2-3 seconds at 20-30 fps
+    private static final int HISTORY_SIZE = 40; // Approx 2 seconds at 20 fps
     private static final double MIN_SEIZURE_MOTION = 0.1; // Threshold to ignore sensor noise
+    private static final double PEAK_SENSITIVITY = 1.35; // Multiplier above mean to detect a rhythmic peak
+    private static final int MIN_SEIZURE_PEAKS = 1; // Minimum rhythmic peaks in window to flag seizure
+    private static final int MAX_SEIZURE_PEAKS = 5; // Maximum rhythmic peaks in window to flag seizure
+
     private boolean seizureDetected = false;
     private int lastSeenFrames = 0;
     private double cumulativeMotion = 0;
@@ -57,18 +61,17 @@ public class TrackedPerson {
         boolean above = false;
         
         for (Double val : motionHistory) {
-            if (val > mean * 1.35 && !above) {
+            if (val > mean * PEAK_SENSITIVITY && !above) {
                 peaks++;
                 above = true;
             } else if (val < mean && above) {
                 above = false;
             }
-            System.out.println("val: " + val);
         }
 
-        // Seizure rhythm check: 2Hz to 6Hz
+        // Seizure rhythm check
         // If 60 frames = 2 seconds, then 4 to 12 peaks = 2-6Hz
-        seizureDetected = (peaks >= 1 && peaks <= 5);
+        seizureDetected = (peaks >= MIN_SEIZURE_PEAKS && peaks <= MAX_SEIZURE_PEAKS);
         System.out.println("Hertz: " + peaks);
     }
 

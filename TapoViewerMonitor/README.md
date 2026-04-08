@@ -32,7 +32,10 @@ The seizure detection system uses a combination of temporal tracking, motion qua
 
 ### The `TrackedPerson` Class
 This class is the core of the analysis. It maintains the state and history for every individual currently seen by the camera:
-- **Motion History:** A circular buffer (`LinkedList<Double>`) that stores the "Motion Intensity" of the person over the last **60 frames** (approx. 2-3 seconds).
+- **`HISTORY_SIZE` (40):** A circular buffer (`LinkedList<Double>`) that stores the "Motion Intensity" of the person over the last **40 frames** (approx. 2 seconds at 20 fps).
+- **`MIN_SEIZURE_MOTION` (0.1):** To prevent false alarms from camera sensor noise or compression artifacts, the mean motion must be above this threshold. If the "shaking" is too faint, it is ignored.
+- **`PEAK_SENSITIVITY` (1.35):** Defines how high a motion spike must be relative to the mean to be considered a "peak" in the rhythmic jerk pattern.
+- **`MIN_SEIZURE_PEAKS` (1) & `MAX_SEIZURE_PEAKS` (5):** The range of detected peaks within the history window required to flag a seizure. This correlates to the typical frequency of rhythmic jerking.
 - **Previous Frame State:** Stores a grayscale version of the person's bounding box from the previous frame to calculate frame-to-frame motion.
 - **Cumulative Motion:** Tracks total movement over the person's entire lifetime to help differentiate between living beings and static furniture.
 
@@ -42,10 +45,10 @@ The system doesn't just look at if the *box* moves, but if the *pixels inside* t
 - **Mean Magnitude:** The intensities of all these vectors are averaged to create a single "Motion Magnitude" for that frame, representing how much the person is "shaking" or moving internally.
 
 ### 2. Rhythmic Jerk Detection (Frequency Analysis)
-Once a 60-frame history is established, the `analyzeSeizure` method scans the motion signal:
-- **Mean & Peaks:** It calculates the mean motion and looks for "peaks" (points where motion spikes 1.5x above the mean). 
-- **Frequency Matching:** In an epileptic seizure, movements are rhythmic. The system counts these peaks. If the count corresponds to a frequency of **2Hz to 6Hz** (roughly 4 to 15 peaks in our 60-frame window), the person is flagged.
-- **Noise Floor (`MIN_SEIZURE_MOTION`):** To prevent false alarms from camera sensor noise or compression artifacts, the mean motion must be above a threshold of **0.5**. If the "shaking" is too faint, it is ignored.
+Once a 40-frame history is established, the `analyzeSeizure` method scans the motion signal:
+- **Mean & Peaks:** It calculates the mean motion and looks for "peaks" where motion spikes above the mean multiplied by `PEAK_SENSITIVITY` (1.35).
+- **Frequency Matching:** In an epileptic seizure, movements are rhythmic. The system counts these peaks. If the count is within the range of `MIN_SEIZURE_PEAKS` (1) and `MAX_SEIZURE_PEAKS` (5) within our 40-frame window, the person is flagged.
+- **Noise Floor:** If the mean motion is below `MIN_SEIZURE_MOTION` (0.1), it is considered sensor noise and ignored.
 
 ### 3. False Positive Filtering
 To ensure reliability, the system employs two layers of filtering:
