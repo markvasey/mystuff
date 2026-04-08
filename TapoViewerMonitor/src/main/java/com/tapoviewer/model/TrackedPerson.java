@@ -9,8 +9,10 @@ public class TrackedPerson {
     private Mat lastGrayRegion;
     private final LinkedList<Double> motionHistory = new LinkedList<>();
     private static final int HISTORY_SIZE = 60; // Approx 2-3 seconds at 20-30 fps
+    private static final double MIN_SEIZURE_MOTION = 0.5; // Threshold to ignore sensor noise
     private boolean seizureDetected = false;
     private int lastSeenFrames = 0;
+    private double cumulativeMotion = 0;
 
     public TrackedPerson(Rectangle bounds) {
         this.bounds = bounds;
@@ -29,6 +31,7 @@ public class TrackedPerson {
 
     public void addMotion(double magnitude) {
         motionHistory.add(magnitude);
+        cumulativeMotion += magnitude;
         if (motionHistory.size() > HISTORY_SIZE) {
             motionHistory.removeFirst();
         }
@@ -41,8 +44,15 @@ public class TrackedPerson {
             return;
         }
 
-        // Calculate zero-crossing rate or peak frequency of the motion signal
+        // Calculate mean motion magnitude
         double mean = motionHistory.stream().mapToDouble(d -> d).average().orElse(0.0);
+        
+        // BUG FIX #1: If motion is below the noise floor, it's not a seizure
+        if (mean < MIN_SEIZURE_MOTION) {
+            seizureDetected = false;
+            return;
+        }
+
         int peaks = 0;
         boolean above = false;
         
@@ -61,6 +71,12 @@ public class TrackedPerson {
     }
 
     public boolean isSeizureDetected() { return seizureDetected; }
+    
+    // BUG FIX #2: If we've seen this object for many frames and it's barely moved,
+    // it's probably furniture, not a person.
+    public boolean isLikelyStaticObject() {
+        return (lastSeenFrames > 50 && (cumulativeMotion / (lastSeenFrames + 1)) < 0.2);
+    }
     
     public int incrementLastSeen() { return ++lastSeenFrames; }
     public void resetLastSeen() { lastSeenFrames = 0; }
