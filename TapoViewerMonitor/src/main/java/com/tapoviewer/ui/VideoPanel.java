@@ -86,7 +86,7 @@ public class VideoPanel extends JPanel {
 
                         RectVector detections = new RectVector();
                         // BUG FIX #2: Increased hitThreshold to 0.2 to reduce initial false positives
-                        hog.detectMultiScale(resizedMat, detections, 0, new Size(8, 8), new Size(32, 32), 1.05, 2.0, false);
+                        hog.detectMultiScale(resizedMat, detections, 0.3, new Size(8, 8), new Size(32, 32), 1.05, 2.0, false);
 
                         // Rescale results and update tracking
                         List<Rectangle> currentDetections = new ArrayList<>();
