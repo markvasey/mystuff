@@ -85,7 +85,7 @@ public class VideoPanel extends JPanel {
                         org.bytedeco.opencv.global.opencv_imgproc.resize(mat, resizedMat, new Size(640, (int) (mat.rows() * scale)));
 
                         RectVector detections = new RectVector();
-                        // BUG FIX #2: Increased hitThreshold to 0.2 to reduce initial false positives
+                        // BUG FIX #2: Increased hitThreshold from 0.0 to 0.2 then to 0.3 to reduce initial false positives
                         hog.detectMultiScale(resizedMat, detections, 0.3, new Size(8, 8), new Size(32, 32), 1.05, 2.0, false);
 
                         // Rescale results and update tracking

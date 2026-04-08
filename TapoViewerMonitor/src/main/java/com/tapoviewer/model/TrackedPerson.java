@@ -9,7 +9,7 @@ public class TrackedPerson {
     private Mat lastGrayRegion;
     private final LinkedList<Double> motionHistory = new LinkedList<>();
     private static final int HISTORY_SIZE = 60; // Approx 2-3 seconds at 20-30 fps
-    private static final double MIN_SEIZURE_MOTION = 0.5; // Threshold to ignore sensor noise
+    private static final double MIN_SEIZURE_MOTION = 0.0; // Threshold to ignore sensor noise
     private boolean seizureDetected = false;
     private int lastSeenFrames = 0;
     private double cumulativeMotion = 0;
