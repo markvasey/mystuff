@@ -37,6 +37,7 @@ public class ControlPanel extends JPanel {
 
     private CameraClient client;
     private final VideoPanel videoPanel;
+    private final DetectionHistoryPanel historyPanel = new DetectionHistoryPanel();
     private boolean isAutoConnecting = false;
     
     private final Map<String, Map<String, String>> houseData = new LinkedHashMap<>();
@@ -48,6 +49,9 @@ public class ControlPanel extends JPanel {
         loadCameraXml();
         loadSecrets();
         setupCombos();
+
+        // Register snapshot listener
+        videoPanel.setSnapshotListener(historyPanel::addSnapshot);
 
         JPanel settingsPanel = new JPanel(new GridLayout(6, 2));
         settingsPanel.add(new JLabel("House:"));
@@ -78,6 +82,7 @@ public class ControlPanel extends JPanel {
         gbc.gridx = 2; gbc.gridy = 3; ptzPanel.add(zoomOutBtn, gbc);
 
         add(ptzPanel, BorderLayout.CENTER);
+        add(historyPanel, BorderLayout.SOUTH);
 
         connectBtn.addActionListener(e -> connect());
 

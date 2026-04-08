@@ -4,6 +4,7 @@ import org.bytedeco.javacv.CanvasFrame;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
+import com.tapoviewer.model.PersonSnapshot;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_objdetect.HOGDescriptor;
 import org.bytedeco.javacv.OpenCVFrameConverter;
@@ -15,8 +16,10 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 public class VideoPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(VideoPanel.class);
@@ -28,6 +31,8 @@ public class VideoPanel extends JPanel {
     private final HOGDescriptor hog;
     private final OpenCVFrameConverter.ToMat toMatConverter = new OpenCVFrameConverter.ToMat();
     private final List<Rectangle> personDetections = new CopyOnWriteArrayList<>();
+    private Consumer<PersonSnapshot> snapshotListener;
+    private LocalDateTime lastSnapshotTime = LocalDateTime.MIN;
 
     public VideoPanel() {
         setBackground(Color.BLACK);
@@ -36,6 +41,10 @@ public class VideoPanel extends JPanel {
         // Initialize HOG detector
         hog = new HOGDescriptor();
         hog.setSVMDetector(new Mat(HOGDescriptor.getDefaultPeopleDetector()));
+    }
+
+    public void setSnapshotListener(Consumer<PersonSnapshot> listener) {
+        this.snapshotListener = listener;
     }
 
     public void play(String ip, int port, String stream, String username, String password) {
@@ -86,6 +95,33 @@ public class VideoPanel extends JPanel {
                     BufferedImage img = converter.getBufferedImage(frame);
                     if (img != null) {
                         currentFrame = img;
+                        
+                        // Handle Snapshots
+                        if (snapshotListener != null && !personDetections.isEmpty()) {
+                            LocalDateTime now = LocalDateTime.now();
+                            if (now.isAfter(lastSnapshotTime.plusSeconds(1))) {
+                                for (Rectangle rect : personDetections) {
+                                    // Ensure within image bounds
+                                    int x = Math.max(0, rect.x);
+                                    int y = Math.max(0, rect.y);
+                                    int w = Math.min(rect.width, img.getWidth() - x);
+                                    int h = Math.min(rect.height, img.getHeight() - y);
+                                    
+                                    if (w > 0 && h > 0) {
+                                        BufferedImage crop = img.getSubimage(x, y, w, h);
+                                        // Send a copy to avoid modification issues
+                                        BufferedImage copy = new BufferedImage(w, h, crop.getType());
+                                        Graphics2D g2 = copy.createGraphics();
+                                        g2.drawImage(crop, 0, 0, null);
+                                        g2.dispose();
+                                        
+                                        snapshotListener.accept(new PersonSnapshot(copy, now));
+                                        lastSnapshotTime = now;
+                                        break; // Only capture one person per frame to avoid spam
+                                    }
+                                }
+                            }
+                        }
                         repaint();
                     }
                 }
