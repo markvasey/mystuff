@@ -6,10 +6,13 @@ import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
 import com.tapoviewer.model.PersonSnapshot;
+import com.tapoviewer.model.TrackedPerson;
 import org.bytedeco.opencv.opencv_core.*;
 import org.bytedeco.opencv.opencv_objdetect.HOGDescriptor;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
+import static org.bytedeco.opencv.global.opencv_video.*;
+import static org.bytedeco.opencv.global.opencv_core.*;
 import org.bytedeco.javacpp.FloatPointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +21,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -31,7 +35,8 @@ public class VideoPanel extends JPanel {
 
     private final HOGDescriptor hog;
     private final OpenCVFrameConverter.ToMat toMatConverter = new OpenCVFrameConverter.ToMat();
-    private final List<Rectangle> personDetections = new CopyOnWriteArrayList<>();
+    private final List<TrackedPerson> trackedPeople = new ArrayList<>();
+    private final List<TrackedPerson> renderList = new CopyOnWriteArrayList<>();
     private Consumer<PersonSnapshot> snapshotListener;
     private LocalDateTime lastSnapshotTime = LocalDateTime.MIN;
 
@@ -82,17 +87,19 @@ public class VideoPanel extends JPanel {
                         RectVector detections = new RectVector();
                         hog.detectMultiScale(resizedMat, detections);
 
-                        // Rescale results and update thread-safe list
-                        personDetections.clear();
+                        // Rescale results and update tracking
+                        List<Rectangle> currentDetections = new ArrayList<>();
                         for (long i = 0; i < detections.size(); i++) {
                             Rect r = detections.get(i);
-                            personDetections.add(new Rectangle(
+                            currentDetections.add(new Rectangle(
                                     (int) (r.x() / scale),
                                     (int) (r.y() / scale),
                                     (int) (r.width() / scale),
                                     (int) (r.height() / scale)
                             ));
                         }
+                        
+                        updateTracking(mat, currentDetections);
                         resizedMat.release();
                     }
 
@@ -101,10 +108,11 @@ public class VideoPanel extends JPanel {
                         currentFrame = img;
                         
                         // Handle Snapshots
-                        if (snapshotListener != null && !personDetections.isEmpty()) {
+                        if (snapshotListener != null && !renderList.isEmpty()) {
                             LocalDateTime now = LocalDateTime.now();
                             if (now.isAfter(lastSnapshotTime.plusSeconds(1))) {
-                                for (Rectangle rect : personDetections) {
+                                for (TrackedPerson person : renderList) {
+                                    Rectangle rect = person.getBounds();
                                     // Ensure within image bounds
                                     int x = Math.max(0, rect.x);
                                     int y = Math.max(0, rect.y);
@@ -121,7 +129,7 @@ public class VideoPanel extends JPanel {
                                         
                                         snapshotListener.accept(new PersonSnapshot(copy, now));
                                         lastSnapshotTime = now;
-                                        break; // Only capture one person per frame to avoid spam
+                                        break; // Only capture one person per frame
                                     }
                                 }
                             }
@@ -137,6 +145,112 @@ public class VideoPanel extends JPanel {
         });
         workerThread.setDaemon(true);
         workerThread.start();
+    }
+
+    private void updateTracking(Mat fullMat, List<Rectangle> detections) {
+        // Simple IoU-based tracking
+        List<TrackedPerson> matchedPeople = new ArrayList<>();
+        
+        for (Rectangle det : detections) {
+            TrackedPerson bestMatch = null;
+            double maxIoU = 0.3; // Minimum overlap threshold
+            
+            for (TrackedPerson p : trackedPeople) {
+                double iou = calculateIoU(det, p.getBounds());
+                if (iou > maxIoU) {
+                    maxIoU = iou;
+                    bestMatch = p;
+                }
+            }
+            
+            if (bestMatch != null) {
+                bestMatch.setBounds(det);
+                bestMatch.resetLastSeen();
+                trackedPeople.remove(bestMatch);
+                matchedPeople.add(bestMatch);
+            } else {
+                matchedPeople.add(new TrackedPerson(det));
+            }
+        }
+        
+        // Cleanup old people
+        for (TrackedPerson p : trackedPeople) {
+            if (p.incrementLastSeen() < 5) {
+                matchedPeople.add(p);
+            } else {
+                p.release();
+            }
+        }
+        
+        trackedPeople.clear();
+        trackedPeople.addAll(matchedPeople);
+        
+        // Calculate Optical Flow for each matched person
+        for (TrackedPerson p : trackedPeople) {
+            Rectangle r = p.getBounds();
+            // Bound safety
+            int x = Math.max(0, r.x);
+            int y = Math.max(0, r.y);
+            int w = Math.min(r.width, fullMat.cols() - x);
+            int h = Math.min(r.height, fullMat.rows() - y);
+            
+            if (w <= 0 || h <= 0) continue;
+
+            Mat region = new Mat(fullMat, new Rect(x, y, w, h));
+            Mat grayRegion = new Mat();
+            cvtColor(region, grayRegion, COLOR_BGR2GRAY);
+            
+            if (p.getLastGrayRegion() != null && 
+                p.getLastGrayRegion().rows() == grayRegion.rows() && 
+                p.getLastGrayRegion().cols() == grayRegion.cols()) {
+                
+                Mat flow = new Mat();
+                calcOpticalFlowFarneback(p.getLastGrayRegion(), grayRegion, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
+                
+                // Average motion magnitude
+                MatVector flowChannels = new MatVector();
+                split(flow, flowChannels);
+                
+                if (flowChannels.size() >= 2) {
+                    Mat flowX = flowChannels.get(0);
+                    Mat flowY = flowChannels.get(1);
+                    Mat mag = new Mat();
+                    cartToPolar(flowX, flowY, mag, new Mat());
+                    
+                    Scalar meanMag = mean(mag);
+                    if (meanMag != null) {
+                        p.addMotion(meanMag.get());
+                    }
+                    
+                    mag.release();
+                    flowX.release();
+                    flowY.release();
+                }
+                
+                flowChannels.close();
+                flow.release();
+            }
+            
+            p.setLastGrayRegion(grayRegion);
+            region.release();
+        }
+        
+        renderList.clear();
+        renderList.addAll(trackedPeople);
+    }
+
+    private double calculateIoU(Rectangle r1, Rectangle r2) {
+        int intersectionX = Math.max(r1.x, r2.x);
+        int intersectionY = Math.max(r1.y, r2.y);
+        int intersectionW = Math.min(r1.x + r1.width, r2.x + r2.width) - intersectionX;
+        int intersectionH = Math.min(r1.y + r1.height, r2.y + r2.height) - intersectionY;
+
+        if (intersectionW <= 0 || intersectionH <= 0) return 0;
+
+        double intersectionArea = intersectionW * intersectionH;
+        double unionArea = (r1.width * r1.height) + (r2.width * r2.height) - intersectionArea;
+
+        return intersectionArea / unionArea;
     }
 
     @Override
@@ -159,14 +273,23 @@ public class VideoPanel extends JPanel {
 
             // Draw detections
             Graphics2D g2 = (Graphics2D) g;
-            g2.setColor(Color.GREEN);
             g2.setStroke(new BasicStroke(3.0f));
-            for (Rectangle rect : personDetections) {
+            for (TrackedPerson person : renderList) {
+                Rectangle rect = person.getBounds();
                 int rx = x + (int) (rect.x * ratio);
                 int ry = y + (int) (rect.y * ratio);
                 int rw = (int) (rect.width * ratio);
                 int rh = (int) (rect.height * ratio);
-                g2.drawRect(rx, ry, rw, rh);
+                
+                if (person.isSeizureDetected()) {
+                    g2.setColor(Color.RED);
+                    g2.drawRect(rx, ry, rw, rh);
+                    g2.setFont(new Font("Arial", Font.BOLD, 16));
+                    g2.drawString("SEIZURE DETECTED", rx, ry - 5);
+                } else {
+                    g2.setColor(Color.GREEN);
+                    g2.drawRect(rx, ry, rw, rh);
+                }
             }
         } else {
             g.setColor(Color.WHITE);
@@ -197,7 +320,9 @@ public class VideoPanel extends JPanel {
             logger.warn("Cleanup error: {}", e.getMessage());
         }
         currentFrame = null;
-        personDetections.clear();
+        for (TrackedPerson p : trackedPeople) p.release();
+        trackedPeople.clear();
+        renderList.clear();
         repaint();
     }
 
