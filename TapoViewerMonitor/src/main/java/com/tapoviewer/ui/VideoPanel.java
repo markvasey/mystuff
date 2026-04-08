@@ -4,12 +4,19 @@ import org.bytedeco.javacv.CanvasFrame;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
+import org.bytedeco.opencv.opencv_core.*;
+import org.bytedeco.opencv.opencv_objdetect.HOGDescriptor;
+import org.bytedeco.javacv.OpenCVFrameConverter;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
+import org.bytedeco.javacpp.FloatPointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class VideoPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(VideoPanel.class);
@@ -18,9 +25,17 @@ public class VideoPanel extends JPanel {
     private BufferedImage currentFrame;
     private Thread workerThread;
 
+    private final HOGDescriptor hog;
+    private final OpenCVFrameConverter.ToMat toMatConverter = new OpenCVFrameConverter.ToMat();
+    private final List<Rectangle> personDetections = new CopyOnWriteArrayList<>();
+
     public VideoPanel() {
         setBackground(Color.BLACK);
         setLayout(new BorderLayout());
+
+        // Initialize HOG detector
+        hog = new HOGDescriptor();
+        hog.setSVMDetector(new Mat(HOGDescriptor.getDefaultPeopleDetector()));
     }
 
     public void play(String ip, int port, String stream, String username, String password) {
@@ -42,7 +57,32 @@ public class VideoPanel extends JPanel {
                 while (running) {
                     Frame frame = grabber.grabImage();
                     if (frame == null) break;
-                    
+
+                    // Person Detection
+                    Mat mat = toMatConverter.convert(frame);
+                    if (mat != null && !mat.empty()) {
+                        // Downscale for performance (640px wide)
+                        double scale = 640.0 / mat.cols();
+                        Mat resizedMat = new Mat();
+                        org.bytedeco.opencv.global.opencv_imgproc.resize(mat, resizedMat, new Size(640, (int) (mat.rows() * scale)));
+
+                        RectVector detections = new RectVector();
+                        hog.detectMultiScale(resizedMat, detections);
+
+                        // Rescale results and update thread-safe list
+                        personDetections.clear();
+                        for (long i = 0; i < detections.size(); i++) {
+                            Rect r = detections.get(i);
+                            personDetections.add(new Rectangle(
+                                    (int) (r.x() / scale),
+                                    (int) (r.y() / scale),
+                                    (int) (r.width() / scale),
+                                    (int) (r.height() / scale)
+                            ));
+                        }
+                        resizedMat.release();
+                    }
+
                     BufferedImage img = converter.getBufferedImage(frame);
                     if (img != null) {
                         currentFrame = img;
@@ -76,6 +116,18 @@ public class VideoPanel extends JPanel {
             int y = (panelHeight - newHeight) / 2;
 
             g.drawImage(currentFrame, x, y, newWidth, newHeight, null);
+
+            // Draw detections
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setColor(Color.GREEN);
+            g2.setStroke(new BasicStroke(3.0f));
+            for (Rectangle rect : personDetections) {
+                int rx = x + (int) (rect.x * ratio);
+                int ry = y + (int) (rect.y * ratio);
+                int rw = (int) (rect.width * ratio);
+                int rh = (int) (rect.height * ratio);
+                g2.drawRect(rx, ry, rw, rh);
+            }
         } else {
             g.setColor(Color.WHITE);
             g.drawString("No Video Signal", getWidth() / 2 - 40, getHeight() / 2);
@@ -105,6 +157,7 @@ public class VideoPanel extends JPanel {
             logger.warn("Cleanup error: {}", e.getMessage());
         }
         currentFrame = null;
+        personDetections.clear();
         repaint();
     }
 
