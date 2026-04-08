@@ -84,7 +84,13 @@ public class ControlPanel extends JPanel {
         add(ptzPanel, BorderLayout.CENTER);
         add(historyPanel, BorderLayout.SOUTH);
 
-        connectBtn.addActionListener(e -> connect());
+        connectBtn.addActionListener(e -> {
+            if (connectBtn.getText().equals("Disconnect")) {
+                disconnect();
+            } else {
+                connect();
+            }
+        });
 
         upBtn.addActionListener(e -> move(PtzType.UP));
         downBtn.addActionListener(e -> move(PtzType.DOWN));
@@ -160,7 +166,7 @@ public class ControlPanel extends JPanel {
                 String ip = houseData.get(selectedHouse).get(selectedCam);
                 ipLabel.setText(ip);
                 
-                if (!isAutoConnecting && connectBtn.getText().equals("Connected")) {
+                if (!isAutoConnecting && (connectBtn.getText().equals("Disconnect") || connectBtn.getText().equals("Connected"))) {
                     connect();
                 }
             }
@@ -216,6 +222,11 @@ public class ControlPanel extends JPanel {
                 connectBtn.setText("Connected");
                 connectBtn.setEnabled(true);
                 setPtzEnabled(true, zoomSupported);
+
+                // Transition to Disconnect after a 1-second delay
+                javax.swing.Timer timer = new javax.swing.Timer(1000, evt -> connectBtn.setText("Disconnect"));
+                timer.setRepeats(false);
+                timer.start();
             });
         }).exceptionally(ex -> {
             logger.error("ONVIF Connection Failed: {}", ex.getMessage());
@@ -226,6 +237,16 @@ public class ControlPanel extends JPanel {
             });
             return null;
         });
+    }
+
+    private void disconnect() {
+        if (client != null) {
+            client.release();
+            client = null;
+        }
+        videoPanel.stop();
+        connectBtn.setText("Connect");
+        setPtzEnabled(false, false);
     }
 
     public void release() {
