@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <comparators>
-    <district postcode="TS27" actualArea="150" actualRooms="7">
+    <district postcode="TS27" actualArea="130" actualRooms="7">
         <name>Hartlepool</name>
-        <minRooms>6</minRooms>
-        <maxRooms>10</maxRooms>
+        <minRooms>5</minRooms>
+        <maxRooms>9</maxRooms>
         <propertyType>Detached</propertyType>
         <ageBand></ageBand>
         <minArea>100</minArea>
-        <maxArea>200</maxArea>
+        <maxArea>225</maxArea>
     </district>
-    <district postcode="EX39" actualArea="350" actualRooms="12">
+    <district postcode="EX39" actualArea="325" actualRooms="11">
         <name>Bideford</name>
         <minRooms>8</minRooms>
-        <maxRooms>14</maxRooms>
+        <maxRooms>15</maxRooms>
         <propertyType>Detached</propertyType>
         <ageBand></ageBand>
         <minArea>200</minArea>
-        <maxArea>600</maxArea>
+        <maxArea>425</maxArea>
     </district>
-    <district postcode="KT4" actualArea="240" actualRooms="11">
+    <district postcode="KT4" actualArea="225" actualRooms="11">
         <name>Kingston</name>
         <minRooms>8</minRooms>
-        <maxRooms>14</maxRooms>
+        <maxRooms>15</maxRooms>
         <propertyType>Semi-detached</propertyType>
         <ageBand></ageBand>
         <minArea>150</minArea>
-        <maxArea>400</maxArea>
+        <maxArea>325</maxArea>
     </district>
-    <district postcode="RG27" actualArea="100" actualRooms="5">
+    <district postcode="RG27" actualArea="80" actualRooms="5">
         <name>Hartley Wintney</name>
         <minRooms>4</minRooms>
         <maxRooms>8</maxRooms>
@@ -36,10 +36,10 @@
         <minArea>50</minArea>
         <maxArea>150</maxArea>
     </district>
-    <district postcode="RG27" actualArea="180" actualRooms="8">
+    <district postcode="RG27" actualArea="180" actualRooms="7">
         <name>Hook</name>
-        <minRooms>7</minRooms>
-        <maxRooms>10</maxRooms>
+        <minRooms>5</minRooms>
+        <maxRooms>9</maxRooms>
         <propertyType>Semi-detached</propertyType>
         <ageBand></ageBand>
         <minArea>140</minArea>
