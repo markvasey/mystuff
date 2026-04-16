@@ -35,7 +35,7 @@ public class HousePriceMonitorApplicationTests {
 	@Test
 	public void testDashboardAccess() throws Exception {
 		when(analyticsService.getTransactionsByDistrict()).thenReturn(Collections.emptyMap());
-		when(comparisonConfigService.getAllCriteria()).thenReturn(Collections.emptyMap());
+		when(comparisonConfigService.getAllCriteria()).thenReturn(Collections.emptyList());
 
 		mockMvc.perform(get("/dashboard"))
 				.andExpect(status().isOk())
@@ -45,7 +45,7 @@ public class HousePriceMonitorApplicationTests {
 	@Test
 	public void testDashboardCaseInsensitiveAccess() throws Exception {
 		when(analyticsService.getTransactionsByDistrict()).thenReturn(Collections.emptyMap());
-		when(comparisonConfigService.getAllCriteria()).thenReturn(Collections.emptyMap());
+		when(comparisonConfigService.getAllCriteria()).thenReturn(Collections.emptyList());
 
 		mockMvc.perform(get("/DASHBOARD"))
 				.andExpect(status().isOk())

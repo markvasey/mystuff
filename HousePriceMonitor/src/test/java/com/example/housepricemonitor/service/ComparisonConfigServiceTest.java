@@ -15,13 +15,12 @@ public class ComparisonConfigServiceTest {
         ComparisonConfigService service = new ComparisonConfigService();
         service.loadConfig();
 
-        Map<String, ComparatorsConfig.DistrictCriteria> allCriteria = service.getAllCriteria();
+        java.util.List<com.example.housepricemonitor.dto.ComparatorsConfig.DistrictCriteria> allCriteria = service.getAllCriteria();
         assertNotNull(allCriteria);
         assertFalse(allCriteria.isEmpty(), "Should load criteria from HouseComparators.xml");
 
-        // Verify one of the default districts
-        ComparatorsConfig.DistrictCriteria ts27 = service.getCriteriaForDistrict("TS27");
-        assertNotNull(ts27);
-        assertEquals("Hartlepool", ts27.getName());
+        // Verify one of the default districts exists in the list
+        boolean found = allCriteria.stream().anyMatch(c -> c.getPostcode().equals("TS27") && c.getName().equals("Hartlepool"));
+        assertTrue(found, "Should find Hartlepool in the loaded list");
     }
 }

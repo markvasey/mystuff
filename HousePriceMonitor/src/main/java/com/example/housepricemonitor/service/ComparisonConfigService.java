@@ -7,13 +7,15 @@ import jakarta.xml.bind.Unmarshaller;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
 public class ComparisonConfigService {
 
-    private Map<String, ComparatorsConfig.DistrictCriteria> criteriaMap = new HashMap<>();
+    private List<ComparatorsConfig.DistrictCriteria> allCriteria = new ArrayList<>();
 
     @PostConstruct
     public void loadConfig() {
@@ -22,19 +24,13 @@ public class ComparisonConfigService {
             Unmarshaller unmarshaller = context.createUnmarshaller();
             ClassPathResource resource = new ClassPathResource("HouseComparators.xml");
             ComparatorsConfig config = (ComparatorsConfig) unmarshaller.unmarshal(resource.getInputStream());
-            for (ComparatorsConfig.DistrictCriteria district : config.getDistricts()) {
-                criteriaMap.put(district.getPostcode(), district);
-            }
+            allCriteria = config.getDistricts();
         } catch (Exception e) {
             throw new RuntimeException("Failed to load HouseComparators.xml", e);
         }
     }
 
-    public ComparatorsConfig.DistrictCriteria getCriteriaForDistrict(String district) {
-        return criteriaMap.get(district);
-    }
-
-    public Map<String, ComparatorsConfig.DistrictCriteria> getAllCriteria() {
-        return criteriaMap;
+    public List<ComparatorsConfig.DistrictCriteria> getAllCriteria() {
+        return allCriteria;
     }
 }

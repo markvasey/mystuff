@@ -27,4 +27,22 @@
         <minArea>150</minArea>
         <maxArea>400</maxArea>
     </district>
+    <district postcode="RG27" actualArea="100" actualRooms="5">
+        <name>Hartley Wintney</name>
+        <minRooms>4</minRooms>
+        <maxRooms>8</maxRooms>
+        <propertyType>Semi-detached</propertyType>
+        <ageBand></ageBand>
+        <minArea>50</minArea>
+        <maxArea>150</maxArea>
+    </district>
+    <district postcode="RG27" actualArea="180" actualRooms="8">
+        <name>Hook</name>
+        <minRooms>7</minRooms>
+        <maxRooms>10</maxRooms>
+        <propertyType>Semi-detached</propertyType>
+        <ageBand></ageBand>
+        <minArea>140</minArea>
+        <maxArea>250</maxArea>
+    </district>
 </comparators>

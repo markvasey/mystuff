@@ -1,5 +1,6 @@
 package com.example.housepricemonitor.service;
 
+import com.example.housepricemonitor.dto.ComparatorsConfig;
 import com.example.housepricemonitor.model.MonitoredArea;
 import com.example.housepricemonitor.model.PropertyDetail;
 import com.example.housepricemonitor.model.PropertyTransaction;
@@ -30,29 +31,33 @@ public class HousePricePoller {
     private final LandRegistryService landRegistryService;
     private final EpcService epcService;
 
+    private final ComparisonConfigService comparisonConfigService;
+
     public HousePricePoller(MonitoredAreaRepository monitoredAreaRepository,
                             PropertyTransactionRepository propertyTransactionRepository,
                             PropertyDetailRepository propertyDetailRepository,
                             LandRegistryService landRegistryService,
-                            EpcService epcService) {
+                            EpcService epcService,
+                            ComparisonConfigService comparisonConfigService) {
         this.monitoredAreaRepository = monitoredAreaRepository;
         this.propertyTransactionRepository = propertyTransactionRepository;
         this.propertyDetailRepository = propertyDetailRepository;
         this.landRegistryService = landRegistryService;
         this.epcService = epcService;
+        this.comparisonConfigService = comparisonConfigService;
     }
 
     @PostConstruct
     public void initAreas() {
-        log.info("Initializing monitored areas...");
-        if (monitoredAreaRepository.count() == 0) {
-            saveArea("TS27", "Hartlepool");
-            saveArea("EX39", "Bideford");
-            saveArea("KT4", "Kingston-Upon-Thames");
-            log.info("Areas initialized: TS27, EX39, KT4");
-        } else {
-            log.info("Areas already initialized. Total areas: {}", monitoredAreaRepository.count());
+        log.info("Synchronizing monitored areas with XML configuration...");
+        for (ComparatorsConfig.DistrictCriteria criteria : comparisonConfigService.getAllCriteria()) {
+            String postcode = criteria.getPostcode();
+            if (monitoredAreaRepository.findByPostcodeDistrict(postcode).isEmpty()) {
+                saveArea(postcode, criteria.getName());
+                log.info("Added new area from XML: {} ({})", postcode, criteria.getName());
+            }
         }
+        log.info("Synchronization complete. Total unique postcodes in DB: {}", monitoredAreaRepository.count());
     }
 
     private void saveArea(String district, String name) {

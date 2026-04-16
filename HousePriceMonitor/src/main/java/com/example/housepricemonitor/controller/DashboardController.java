@@ -8,9 +8,8 @@ import com.example.housepricemonitor.service.HousePricePoller;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+
+import java.util.*;
 
 @Controller
 public class DashboardController {
@@ -35,52 +34,47 @@ public class DashboardController {
     @GetMapping("/dashboard")
     public String dashboard(Model model) {
         Map<String, List<PropertyTransaction>> transactionsByDistrict = analyticsService.getTransactionsByDistrict();
+        List<ComparatorsConfig.DistrictCriteria> allCriteria = comparisonConfigService.getAllCriteria();
         
-        Map<String, Object> stats = new HashMap<>();
-        Map<String, Object> filteredStats = new HashMap<>();
-        Map<String, List<PropertyTransaction>> filteredTransactions = new HashMap<>();
+        List<Map<String, Object>> dashboardCards = new ArrayList<>();
+        Map<String, List<PropertyTransaction>> tabbedTransactions = new LinkedHashMap<>();
 
-        for (String district : transactionsByDistrict.keySet()) {
-            List<PropertyTransaction> allTxs = transactionsByDistrict.get(district);
-            ComparatorsConfig.DistrictCriteria criteria = comparisonConfigService.getCriteriaForDistrict(district);
+        for (ComparatorsConfig.DistrictCriteria criteria : allCriteria) {
+            String postcode = criteria.getPostcode();
+            List<PropertyTransaction> districtTxs = transactionsByDistrict.getOrDefault(postcode, new ArrayList<>());
             
-            // Sort allTxs so that similar ones are at the top, then by price descending
-            allTxs.sort((a, b) -> {
+            // Calculate Stats for this specific card
+            Map<String, Object> card = new HashMap<>();
+            card.put("criteria", criteria);
+            card.put("marketCount", districtTxs.size());
+            card.put("marketAvgPrice", analyticsService.calculateAveragePrice(districtTxs));
+            card.put("marketAvgPricePerSqm", analyticsService.calculateAveragePricePerSqm(districtTxs));
+
+            List<PropertyTransaction> similarTxs = analyticsService.filterByCriteria(districtTxs, criteria);
+            card.put("similarCount", similarTxs.size());
+            card.put("similarAvgPrice", analyticsService.calculateAveragePrice(similarTxs));
+            card.put("similarAvgPricePerSqm", analyticsService.calculateAveragePricePerSqm(similarTxs));
+            card.put("similarAvgPricePerRoom", analyticsService.calculateAveragePricePerRoom(similarTxs));
+            
+            dashboardCards.add(card);
+
+            // Prepare sorted transactions for this criteria's tab
+            List<PropertyTransaction> sortedTxs = new ArrayList<>(districtTxs);
+            sortedTxs.sort((a, b) -> {
                 boolean aSimilar = analyticsService.isSimilar(a, criteria);
                 boolean bSimilar = analyticsService.isSimilar(b, criteria);
                 if (aSimilar && !bSimilar) return -1;
                 if (!aSimilar && bSimilar) return 1;
-                // Sub-sort by price descending
                 return b.getPrice().compareTo(a.getPrice());
             });
             
-            // Standard Stats
-            Map<String, Object> districtStats = new HashMap<>();
-            districtStats.put("count", allTxs.size());
-            districtStats.put("avgPrice", analyticsService.calculateAveragePrice(allTxs));
-            districtStats.put("avgPricePerSqm", analyticsService.calculateAveragePricePerSqm(allTxs));
-            districtStats.put("avgPricePerRoom", analyticsService.calculateAveragePricePerRoom(allTxs));
-            stats.put(district, districtStats);
-
-            // Filtered (Similar) Stats
-            if (criteria != null) {
-                List<PropertyTransaction> similarTxs = analyticsService.filterByCriteria(allTxs, criteria);
-                Map<String, Object> fStats = new HashMap<>();
-                fStats.put("count", similarTxs.size());
-                fStats.put("avgPrice", analyticsService.calculateAveragePrice(similarTxs));
-                fStats.put("avgPricePerSqm", analyticsService.calculateAveragePricePerSqm(similarTxs));
-                fStats.put("avgPricePerRoom", analyticsService.calculateAveragePricePerRoom(similarTxs));
-                filteredStats.put(district, fStats);
-                filteredTransactions.put(district, similarTxs);
-            }
+            // Use Name + Postcode as unique tab key
+            tabbedTransactions.put(criteria.getName() + " (" + postcode + ")", sortedTxs);
         }
         
-        model.addAttribute("stats", stats);
-        model.addAttribute("filteredStats", filteredStats);
-        model.addAttribute("allTransactions", transactionsByDistrict);
-        model.addAttribute("filteredTransactions", filteredTransactions);
-        model.addAttribute("criteriaMap", comparisonConfigService.getAllCriteria());
-        model.addAttribute("analyticsService", analyticsService); // To use isSimilar in Thymeleaf
+        model.addAttribute("dashboardCards", dashboardCards);
+        model.addAttribute("tabbedTransactions", tabbedTransactions);
+        model.addAttribute("analyticsService", analyticsService);
         return "dashboard";
     }
 

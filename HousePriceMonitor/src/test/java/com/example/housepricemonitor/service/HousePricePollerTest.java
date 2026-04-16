@@ -25,6 +25,7 @@ public class HousePricePollerTest {
     private PropertyDetailRepository detailRepository;
     private LandRegistryService landRegistryService;
     private EpcService epcService;
+    private ComparisonConfigService comparisonConfigService;
 
     @BeforeEach
     void setUp() {
@@ -33,8 +34,9 @@ public class HousePricePollerTest {
         detailRepository = mock(PropertyDetailRepository.class);
         landRegistryService = mock(LandRegistryService.class);
         epcService = mock(EpcService.class);
+        comparisonConfigService = mock(ComparisonConfigService.class);
 
-        poller = new HousePricePoller(monitoredAreaRepository, transactionRepository, detailRepository, landRegistryService, epcService);
+        poller = new HousePricePoller(monitoredAreaRepository, transactionRepository, detailRepository, landRegistryService, epcService, comparisonConfigService);
     }
 
     @Test
