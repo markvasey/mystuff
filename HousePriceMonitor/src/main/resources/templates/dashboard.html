@@ -89,6 +89,13 @@
                     <span style="color: #4CAF50; font-size: 1.1em; font-weight: bold; margin-left: 10px;" 
                           th:text="${#numbers.formatCurrency(card.criteria.actualRooms * card.similarAvgPricePerRoom).replace('$', '£')}">£0</span>
                 </div>
+
+                <div th:if="${card.criteria.actualArea != null && card.criteria.actualRooms != null && card.similarCount > 0}" 
+                     class="comp-label" style="grid-column: span 2; margin-top: 10px; padding-top: 10px; border-top: 2px solid #4CAF50;">
+                    <strong>Average Estimate:</strong>
+                    <span style="color: #2e7d32; font-size: 1.4em; font-weight: bold; margin-left: 10px;" 
+                          th:text="${#numbers.formatCurrency(((card.criteria.actualArea * card.similarAvgPricePerSqm) + (card.criteria.actualRooms * card.similarAvgPricePerRoom)) / 2).replace('$', '£')}">£0</span>
+                </div>
             </div>
             
             <p style="font-size: 0.85em; margin-top: 15px;">
