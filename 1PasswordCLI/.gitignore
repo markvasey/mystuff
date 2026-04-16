@@ -1,5 +1,6 @@
 # Runtime files
 1Password.opvault/
+testingVideos/
 
 # Maven build artifacts
 target/

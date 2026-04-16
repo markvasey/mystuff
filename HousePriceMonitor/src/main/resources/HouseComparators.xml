@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<comparators>
+    <district postcode="TS27" actualArea="150" actualRooms="7">
+        <name>Hartlepool</name>
+        <minRooms>6</minRooms>
+        <maxRooms>10</maxRooms>
+        <propertyType>Detached</propertyType>
+        <ageBand></ageBand>
+        <minArea>100</minArea>
+        <maxArea>200</maxArea>
+    </district>
+    <district postcode="EX39" actualArea="350" actualRooms="12">
+        <name>Bideford</name>
+        <minRooms>8</minRooms>
+        <maxRooms>14</maxRooms>
+        <propertyType>Detached</propertyType>
+        <ageBand></ageBand>
+        <minArea>200</minArea>
+        <maxArea>600</maxArea>
+    </district>
+    <district postcode="KT4" actualArea="240" actualRooms="11">
+        <name>Kingston</name>
+        <minRooms>8</minRooms>
+        <maxRooms>14</maxRooms>
+        <propertyType>Semi-detached</propertyType>
+        <ageBand></ageBand>
+        <minArea>150</minArea>
+        <maxArea>400</maxArea>
+    </district>
+</comparators>
