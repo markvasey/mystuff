@@ -37,13 +37,11 @@ public class DashboardController {
         List<ComparatorsConfig.DistrictCriteria> allCriteria = comparisonConfigService.getAllCriteria();
         
         List<Map<String, Object>> dashboardCards = new ArrayList<>();
-        Map<String, List<PropertyTransaction>> tabbedTransactions = new LinkedHashMap<>();
 
         for (ComparatorsConfig.DistrictCriteria criteria : allCriteria) {
             String postcode = criteria.getPostcode();
             List<PropertyTransaction> districtTxs = transactionsByDistrict.getOrDefault(postcode, new ArrayList<>());
             
-            // Calculate Stats for this specific card
             Map<String, Object> card = new HashMap<>();
             card.put("criteria", criteria);
             card.put("marketCount", districtTxs.size());
@@ -56,9 +54,7 @@ public class DashboardController {
             card.put("similarAvgPricePerSqm", analyticsService.calculateAveragePricePerSqm(similarTxs));
             card.put("similarAvgPricePerRoom", analyticsService.calculateAveragePricePerRoom(similarTxs));
             
-            dashboardCards.add(card);
-
-            // Prepare sorted transactions for this criteria's tab
+            // Prepare sorted transactions for this specific profile
             List<PropertyTransaction> sortedTxs = new ArrayList<>(districtTxs);
             sortedTxs.sort((a, b) -> {
                 boolean aSimilar = analyticsService.isSimilar(a, criteria);
@@ -67,13 +63,12 @@ public class DashboardController {
                 if (!aSimilar && bSimilar) return 1;
                 return b.getPrice().compareTo(a.getPrice());
             });
+            card.put("transactions", sortedTxs);
             
-            // Use Name + Postcode as unique tab key
-            tabbedTransactions.put(criteria.getName() + " (" + postcode + ")", sortedTxs);
+            dashboardCards.add(card);
         }
         
         model.addAttribute("dashboardCards", dashboardCards);
-        model.addAttribute("tabbedTransactions", tabbedTransactions);
         model.addAttribute("analyticsService", analyticsService);
         return "dashboard";
     }

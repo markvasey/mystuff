@@ -1,5 +1,6 @@
 package com.example.housepricemonitor.service;
 
+import com.example.housepricemonitor.dto.ComparatorsConfig;
 import com.example.housepricemonitor.model.MonitoredArea;
 import com.example.housepricemonitor.model.PropertyDetail;
 import com.example.housepricemonitor.model.PropertyTransaction;
@@ -41,9 +42,16 @@ public class HousePricePollerTest {
 
     @Test
     void testInitAreas() {
-        when(monitoredAreaRepository.count()).thenReturn(0L);
+        ComparatorsConfig.DistrictCriteria criteria = new ComparatorsConfig.DistrictCriteria();
+        criteria.setPostcode("KT4");
+        criteria.setName("Kingston");
+        
+        when(comparisonConfigService.getAllCriteria()).thenReturn(Arrays.asList(criteria));
+        when(monitoredAreaRepository.findByPostcodeDistrict("KT4")).thenReturn(Optional.empty());
+        
         poller.initAreas();
-        verify(monitoredAreaRepository, times(3)).save(any(MonitoredArea.class));
+        
+        verify(monitoredAreaRepository, times(1)).save(any(MonitoredArea.class));
     }
 
     @Test

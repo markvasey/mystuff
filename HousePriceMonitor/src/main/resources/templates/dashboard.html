@@ -108,21 +108,21 @@
     <h2>Recent Transactions</h2>
     
     <div class="tabs">
-        <div th:each="entry, iterStat : ${tabbedTransactions}" 
+        <div th:each="card, iterStat : ${dashboardCards}" 
              class="tab" 
              th:classappend="${iterStat.first} ? 'active' : ''"
-             th:text="${entry.key}"
-             th:data-tab-id="'tab-' + ${#strings.replace(#strings.replace(entry.key, ' ', '_'), '(', '_').replace(')', '_')}"
+             th:text="${card.criteria.name + ' (' + card.criteria.postcode + ')'}"
+             th:data-tab-id="'tab-' + ${iterStat.index}"
              onclick="openTab(this)">
              District
         </div>
     </div>
 
-    <div th:each="entry, iterStat : ${tabbedTransactions}" 
-         th:id="'tab-' + ${#strings.replace(#strings.replace(entry.key, ' ', '_'), '(', '_').replace(')', '_')}" 
+    <div th:each="card, iterStat : ${dashboardCards}" 
+         th:id="'tab-' + ${iterStat.index}" 
          th:class="${iterStat.first} ? 'tab-content active' : 'tab-content'">
         
-        <h3 th:text="${entry.key}">District</h3>
+        <h3 th:text="${card.criteria.name + ' (' + card.criteria.postcode + ')'}">District</h3>
         <table>
             <thead>
                 <tr>
@@ -138,9 +138,7 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- We need to find the correct criteria for this tab to highlight similar houses -->
-                <!-- The entry.key is "Name (Postcode)" -->
-                <tr th:each="tx : ${entry.value}">
+                <tr th:each="tx : ${card.transactions}" th:class="${analyticsService.isSimilar(tx, card.criteria) ? 'row-similar' : ''}">
                     <td th:text="${tx.transactionDate}">2023-01-01</td>
                     <td th:text="${tx.address}">123 Main St</td>
                     <td th:text="${#numbers.formatCurrency(tx.price).replace('$', '£')}">£100,000</td>
@@ -150,9 +148,8 @@
                     <td th:text="${tx.pricePerSqm != null ? #numbers.formatCurrency(tx.pricePerSqm).replace('$', '£') : 'N/A'}">£1,000</td>
                     <td th:text="${tx.pricePerRoom != null ? #numbers.formatCurrency(tx.pricePerRoom).replace('$', '£') : 'N/A'}">£10,000</td>
                     <td>
-                        <!-- We cannot easily call isSimilar here without the criteria object -->
-                        <!-- But we can use the price sort logic to identify them or just show MARKET/SIMILAR if we pass more info -->
-                        <span class="badge badge-market">DATA</span>
+                        <span th:if="${analyticsService.isSimilar(tx, card.criteria)}" class="badge badge-similar">SIMILAR</span>
+                        <span th:unless="${analyticsService.isSimilar(tx, card.criteria)}" class="badge badge-market">MARKET</span>
                     </td>
                 </tr>
             </tbody>
