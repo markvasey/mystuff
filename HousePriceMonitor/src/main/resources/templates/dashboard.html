@@ -57,6 +57,8 @@
                 <span th:text="${card.criteria.minArea + '-' + card.criteria.maxArea}">Area</span> m²
                 <br/>
                 <strong>Actual Area (Reference):</strong> <span th:text="${card.criteria.actualArea != null ? card.criteria.actualArea + ' m²' : 'N/A'}">100m²</span>
+                <br/>
+                <strong>Actual Rooms (Reference):</strong> <span th:text="${card.criteria.actualRooms != null ? card.criteria.actualRooms : 'N/A'}">5</span>
             </div>
 
             <div class="comparison-grid">
