@@ -36,12 +36,8 @@ public class PMQsService {
     }
 
     @Transactional
-    public void pollNowWithGid(String gid, List<TWFYClient.TWFYRow> rows) {
-        log.info("Manual poll triggered for GID: {} ({} rows)", gid, rows.size());
-        processRows(rows);
-    }
 
-    private void processRows(List<TWFYClient.TWFYRow> rows) {
+    public void processRows(List<TWFYClient.TWFYRow> rows) {
         log.info("Processing {} rows from full debate transcript", rows.size());
         
         try {

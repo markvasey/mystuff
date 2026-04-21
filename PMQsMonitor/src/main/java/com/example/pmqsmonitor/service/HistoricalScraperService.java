@@ -62,7 +62,7 @@ public class HistoricalScraperService {
         log.info("Starting historical scrape for {} identified files...", files.size());
         
         for (String filename : files) {
-            log.info("Processing XML: {}", filename);
+            //log.info("Processing XML: {}", filename);
             processXmlFile(filename);
         }
     }
@@ -90,7 +90,7 @@ public class HistoricalScraperService {
         Matcher m = pmqPattern.matcher(xml);
 
         while (m.find()) {
-            String speechId = m.group(1); 
+            String speechId = m.group(1);
             String apiGid = speechId.replace("uk.org.publicwhip/debate/", "");
             gids.add(apiGid);
             
@@ -100,10 +100,9 @@ public class HistoricalScraperService {
                 log.info("Fetching transcript for API GID: {}", apiGid);
                 twfyClient.getFullDebateByGid(apiGid)
                         .doOnNext(rows -> {
-                            log.info("HistoricalScraperService.parseGidsFromXml returned " + (rows != null ? rows.size() : 0) + " rows");
                             if (rows != null && !rows.isEmpty()) {
                                 log.info("HistoricalScraperService.parseGidsFromXml returned " + rows.size() + " rows");
-                                pmqsService.pollNowWithGid(apiGid, rows);
+                                pmqsService.processRows(rows);
                             }
                         })
                         .block();
@@ -112,3 +111,4 @@ public class HistoricalScraperService {
         return gids;
     }
 }
+
