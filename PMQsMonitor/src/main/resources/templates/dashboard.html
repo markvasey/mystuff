@@ -19,9 +19,19 @@
     <nav class="navbar navbar-dark bg-dark mb-4">
         <div class="container">
             <span class="navbar-brand mb-0 h1">Hansard PMQs Monitor & Analyser</span>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 align-items-center">
+                <form th:action="@{/}" method="get" class="d-flex gap-2 align-items-center me-3">
+                    <label for="dateSelect" class="text-white small mb-0">Select Wednesday:</label>
+                    <select id="dateSelect" name="date" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="" th:if="${availableDates.empty}">No dates available</option>
+                        <option th:each="d : ${availableDates}" 
+                                th:value="${d}" 
+                                th:text="${#temporals.format(d, 'dd MMM yyyy')}"
+                                th:selected="${d == selectedDate}">Date</option>
+                    </select>
+                </form>
                 <form th:action="@{/scrape}" method="post">
-                    <button type="submit" class="btn btn-outline-light">Scrape 2026</button>
+                    <button type="submit" class="btn btn-outline-light btn-sm">Scrape 2026</button>
                 </form>
             </div>
         </div>
@@ -30,8 +40,11 @@
     <div class="container-fluid px-4">
         <div class="card shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Latest PMQs Transcripts & Analysis</h5>
-                <small class="text-muted">Showing last 100 Wednesday entries</small>
+                <h5 class="mb-0">
+                    <span th:if="${selectedDate != null}" th:text="'PMQs for ' + ${#temporals.format(selectedDate, 'dd MMM yyyy')}">Session Date</span>
+                    <span th:if="${selectedDate == null}">Latest PMQs Transcripts</span>
+                </h5>
+                <small class="text-muted" th:text="${utterances.size()} + ' utterances found'"></small>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">

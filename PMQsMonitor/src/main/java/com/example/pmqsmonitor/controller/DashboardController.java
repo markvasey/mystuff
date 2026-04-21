@@ -19,8 +19,25 @@ public class DashboardController {
     }
 
     @GetMapping("/")
-    public String dashboard(Model model) {
-        model.addAttribute("utterances", pmqsService.getLatestPMQs());
+    public String dashboard(@org.springframework.web.bind.annotation.RequestParam(required = false) String date, Model model) {
+        java.util.List<java.time.LocalDate> availableDates = pmqsService.getAvailableDates();
+        model.addAttribute("availableDates", availableDates);
+
+        java.time.LocalDate selectedDate;
+        if (date != null && !date.isEmpty()) {
+            selectedDate = java.time.LocalDate.parse(date);
+        } else if (!availableDates.isEmpty()) {
+            selectedDate = availableDates.get(0);
+        } else {
+            selectedDate = null;
+        }
+
+        model.addAttribute("selectedDate", selectedDate);
+        if (selectedDate != null) {
+            model.addAttribute("utterances", pmqsService.getUtterancesByDate(selectedDate));
+        } else {
+            model.addAttribute("utterances", java.util.List.of());
+        }
         return "dashboard";
     }
 

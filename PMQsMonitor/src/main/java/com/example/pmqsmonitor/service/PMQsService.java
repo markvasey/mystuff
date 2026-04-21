@@ -168,4 +168,17 @@ public class PMQsService {
                 .limit(200)
                 .collect(Collectors.toList());
     }
+
+    public List<java.time.LocalDate> getAvailableDates() {
+        return utteranceRepository.findDistinctDates().stream()
+                .map(java.sql.Date::toLocalDate)
+                .collect(Collectors.toList());
+    }
+
+    public List<Utterance> getUtterancesByDate(LocalDate date) {
+        return utteranceRepository.findAll().stream()
+                .filter(u -> u.getDateTime() != null && u.getDateTime().toLocalDate().equals(date))
+                .sorted(Comparator.comparing(Utterance::getDateTime))
+                .collect(Collectors.toList());
+    }
 }
