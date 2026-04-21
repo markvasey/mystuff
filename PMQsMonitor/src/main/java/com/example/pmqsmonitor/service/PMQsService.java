@@ -69,8 +69,8 @@ public class PMQsService {
                 if (utterance.isStarmer() || utterance.isRepresentative()) {
                     if (lastQuestion != null && !"answer".equals(lastQuestion.getType())) {
                         String qName = lastQuestion.getSpeakerName() != null ? lastQuestion.getSpeakerName() : "Unknown MP";
-                        log.info("Analyzing answer to question from {}", qName);
-                        analysisService.analyzeUtterance(lastQuestion, utterance);
+                        //log.info("Analyzing answer to question from {}", qName);
+                        //analysisService.analyzeUtterance(lastQuestion, utterance);
                     }
                 } else {
                     if (utterance.getSpeakerName() != null && !utterance.getSpeakerName().contains("Speaker")) {
