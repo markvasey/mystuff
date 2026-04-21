@@ -12,7 +12,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAdjusters;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -36,7 +35,6 @@ public class PMQsService {
     }
 
     @Transactional
-
     public void processRows(List<TWFYClient.TWFYRow> rows) {
         log.info("Processing {} rows from full debate transcript", rows.size());
         
@@ -51,8 +49,6 @@ public class PMQsService {
             for (TWFYClient.TWFYRow row : sortedRows) {
                 if (row.body == null || row.body.trim().isEmpty()) continue;
 
-                log.info("PMQsService.processRows: {} {}", row.speaker== null ? "" : row.speaker.name, row.body);
-
                 String gid = row.gid;
                 Optional<Utterance> existing = utteranceRepository.findByExternalId(gid);
                 
@@ -60,10 +56,10 @@ public class PMQsService {
                 if (existing.isPresent()) {
                     utterance = existing.get();
                     updateMetadata(utterance, row);
+                    utterance.setType(utterance.isStarmer() || utterance.isRepresentative() ? "answer" : "question");
                     utterance = utteranceRepository.save(utterance);
                 } else {
                     utterance = mapToUtterance(row);
-                    // Determine type: default to question, unless it's Starmer
                     utterance.setType(utterance.isStarmer() || utterance.isRepresentative() ? "answer" : "question");
                     utterance = utteranceRepository.save(utterance);
                     log.debug("Saved new utterance: {}, Starmer: {}", gid, utterance.isStarmer());
@@ -73,11 +69,10 @@ public class PMQsService {
                 if (utterance.isStarmer() || utterance.isRepresentative()) {
                     if (lastQuestion != null && !"answer".equals(lastQuestion.getType())) {
                         String qName = lastQuestion.getSpeakerName() != null ? lastQuestion.getSpeakerName() : "Unknown MP";
-                        //log.info("Analyzing answer to question from {}", qName);
-                        //analysisService.analyzeUtterance(lastQuestion, utterance);
+                        log.info("Analyzing answer to question from {}", qName);
+                        analysisService.analyzeUtterance(lastQuestion, utterance);
                     }
                 } else {
-                    // Logic: If it's not Starmer and it's not procedural, it's a question
                     if (utterance.getSpeakerName() != null && !utterance.getSpeakerName().contains("Speaker")) {
                         lastQuestion = utterance;
                     }
@@ -94,7 +89,9 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : null);
-        u.setDebateType(row.debateType);
+        
+        // Fix: Default to Oral questions for PMQs
+        u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
         if (row.speaker != null) {
             u.setSpeakerId(row.speaker.personId);
@@ -113,8 +110,11 @@ public class PMQsService {
              u.setSpeakerName(row.title);
         }
         
+        // Fix: Ensure parentBody is set
         if (row.parent != null) {
             u.setParentBody(row.parent.body);
+        } else if (u.getParentBody() == null) {
+            u.setParentBody("Prime Minister: Engagements");
         }
         
         u.setText(row.body);
@@ -141,7 +141,9 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : u.getListurl());
-        u.setDebateType(row.debateType);
+        
+        // Fix: Default to Oral questions
+        u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
         if (row.speaker != null) {
             u.setSpeakerId(row.speaker.personId);
@@ -156,17 +158,16 @@ public class PMQsService {
             }
         }
         
-        if (row.parent != null && u.getParentBody() == null) {
-            u.setParentBody(row.parent.body);
+        if (u.getSpeakerName() == null && row.title != null) {
+            u.setSpeakerName(row.title);
         }
-    }
-
-    public List<Utterance> getLatestPMQs() {
-        return utteranceRepository.findAll().stream()
-                .filter(u -> u.getDateTime() != null && u.getDateTime().getDayOfWeek() == DayOfWeek.WEDNESDAY)
-                .sorted(Comparator.comparing(Utterance::getDateTime).reversed())
-                .limit(200)
-                .collect(Collectors.toList());
+        
+        // Fix: Ensure parentBody is set
+        if (row.parent != null) {
+            u.setParentBody(row.parent.body);
+        } else if (u.getParentBody() == null) {
+            u.setParentBody("Prime Minister: Engagements");
+        }
     }
 
     public List<java.time.LocalDate> getAvailableDates() {
@@ -175,7 +176,7 @@ public class PMQsService {
                 .collect(Collectors.toList());
     }
 
-    public List<Utterance> getUtterancesByDate(LocalDate date) {
+    public List<Utterance> getUtterancesByDate(java.time.LocalDate date) {
         return utteranceRepository.findAll().stream()
                 .filter(u -> u.getDateTime() != null && u.getDateTime().toLocalDate().equals(date))
                 .sorted(Comparator.comparing(Utterance::getDateTime))
