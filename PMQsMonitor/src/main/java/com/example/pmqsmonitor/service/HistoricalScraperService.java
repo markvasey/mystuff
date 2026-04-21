@@ -100,7 +100,9 @@ public class HistoricalScraperService {
                 log.info("Fetching transcript for API GID: {}", apiGid);
                 twfyClient.getFullDebateByGid(apiGid)
                         .doOnNext(rows -> {
+                            log.info("HistoricalScraperService.parseGidsFromXml returned " + (rows != null ? rows.size() : 0) + " rows");
                             if (rows != null && !rows.isEmpty()) {
+                                log.info("HistoricalScraperService.parseGidsFromXml returned " + rows.size() + " rows");
                                 pmqsService.pollNowWithGid(apiGid, rows);
                             }
                         })

@@ -151,5 +151,6 @@ class TWFYClientTest {
         assertEquals(4, rows.size());
         assertEquals("Keir Starmer", rows.get(3).speaker.name);
         assertEquals("25353", rows.get(3).speaker.personId);
+        assertEquals("<p>An attack on Britain's Jewish community...</p>", rows.get(3).body);
     }
 }

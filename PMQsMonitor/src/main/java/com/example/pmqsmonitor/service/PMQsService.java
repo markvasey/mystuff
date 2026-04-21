@@ -87,6 +87,8 @@ public class PMQsService {
             for (TWFYClient.TWFYRow row : sortedRows) {
                 if (row.body == null || row.body.trim().isEmpty()) continue;
 
+                log.info("PMQsService.processRows: {} {}", row.speaker== null ? "" : row.speaker.name, row.body);
+
                 String gid = row.gid;
                 Optional<Utterance> existing = utteranceRepository.findByExternalId(gid);
                 
