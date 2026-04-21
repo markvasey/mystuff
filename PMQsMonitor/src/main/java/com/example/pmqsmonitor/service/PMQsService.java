@@ -177,11 +177,64 @@ public class PMQsService {
     }
 
     public List<Utterance> getUtterancesByDate(java.time.LocalDate date, boolean hideSpeaker) {
-        return utteranceRepository.findAll().stream()
+        List<Utterance> rawList = utteranceRepository.findAll().stream()
                 .filter(u -> u.getDateTime() != null && u.getDateTime().toLocalDate().equals(date))
                 .filter(u -> u.getSpeakerId() != null) 
                 .filter(u -> !hideSpeaker || (u.getParty() != null && !u.getParty().equalsIgnoreCase("Speaker")))
                 .sorted(Comparator.comparing(Utterance::getDateTime))
                 .collect(Collectors.toList());
+
+        return mergeConsecutiveUtterances(rawList);
+    }
+
+    private List<Utterance> mergeConsecutiveUtterances(List<Utterance> utterances) {
+        if (utterances == null || utterances.isEmpty()) {
+            return utterances;
+        }
+
+        List<Utterance> merged = new java.util.ArrayList<>();
+        Utterance current = null;
+
+        for (Utterance u : utterances) {
+            if (current == null) {
+                current = cloneUtterance(u); // Start with a fresh clone
+                merged.add(current);
+            } else if (u.getSpeakerId().equals(current.getSpeakerId())) {
+                // Merge logic: Combine text and keep the analysis from either if present
+                current.setText(current.getText() + "<br/><br/>" + u.getText());
+                
+                // If the new one has an analysis result and current doesn't, take it
+                if (current.getAnalysisResult() == null && u.getAnalysisResult() != null) {
+                    current.setAnalysisResult(u.getAnalysisResult());
+                }
+            } else {
+                current = cloneUtterance(u);
+                merged.add(current);
+            }
+        }
+        return merged;
+    }
+
+    private Utterance cloneUtterance(Utterance u) {
+        Utterance clone = new Utterance();
+        clone.setId(u.getId());
+        clone.setExternalId(u.getExternalId());
+        clone.setSpeakerName(u.getSpeakerName());
+        clone.setSpeakerId(u.getSpeakerId());
+        clone.setText(u.getText());
+        clone.setDateTime(u.getDateTime());
+        clone.setType(u.getType());
+        clone.setHdate(u.getHdate());
+        clone.setHtime(u.getHtime());
+        clone.setListurl(u.getListurl());
+        clone.setParty(u.getParty());
+        clone.setHouse(u.getHouse());
+        clone.setOffice(u.getOffice());
+        clone.setParentBody(u.getParentBody());
+        clone.setDebateType(u.getDebateType());
+        clone.setStarmer(u.isStarmer());
+        clone.setRepresentative(u.isRepresentative());
+        clone.setAnalysisResult(u.getAnalysisResult());
+        return clone;
     }
 }
