@@ -15,7 +15,7 @@ class GeminiAnalysisIntegrationTest {
     @Autowired
     private AnalysisService analysisService;
 
-    //@Test
+    @Test
     void testRealGeminiAnalysis() {
         // Arrange
         Utterance question = new Utterance();
@@ -39,6 +39,11 @@ class GeminiAnalysisIntegrationTest {
         // Assert
         assertNotNull(answer.getAnalysisResult(), "Analysis result should be populated");
         System.out.println("ANALYSIS SUCCESSFUL!");
+
+        assertEquals("Defensive",answer.getAnalysisResult().getSentiment());
+        assertTrue(answer.getAnalysisResult().getCompleteness()>0);
+        assertFalse(answer.getAnalysisResult().getRational().isEmpty());
+
         System.out.println("Sentiment: " + answer.getAnalysisResult().getSentiment());
         System.out.println("Completeness: " + answer.getAnalysisResult().getCompleteness() + "%");
         System.out.println("Reasoning: " + answer.getAnalysisResult().getRational());
