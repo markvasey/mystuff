@@ -67,7 +67,7 @@ public class AnalysisService {
         try {
             log.info("Sending direct REST request to Gemini for answer: {}", answer.getExternalId());
 
-            // Mirrors the successful curl call
+            // Using v1beta endpoint and explicit model name
             String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
 
             Map<String, Object> requestBody = Map.of(
@@ -88,19 +88,26 @@ public class AnalysisService {
 
             if (responseJson != null) {
                 JsonNode root = objectMapper.readTree(responseJson);
-                JsonNode parts = root.path("candidates").get(0).path("content").path("parts");
-                if (!parts.isMissingNode() && parts.size() > 0) {
-                    String innerJson = parts.get(0).path("text").asText();
-                    AnalysisResult result = objectMapper.readValue(innerJson, AnalysisResult.class);
+                JsonNode candidates = root.path("candidates");
+                if (!candidates.isMissingNode() && candidates.size() > 0) {
+                    JsonNode parts = candidates.get(0).path("content").path("parts");
+                    if (!parts.isMissingNode() && parts.size() > 0) {
+                        String innerJson = parts.get(0).path("text").asText();
+                        AnalysisResult result = objectMapper.readValue(innerJson, AnalysisResult.class);
 
-                    if (result != null) {
-                        result.setUtterance(answer);
-                        result.setAnalyzedAt(LocalDateTime.now());
-                        answer.setAnalysisResult(result);
-                        log.info("Analysis completed successfully for {}", answer.getExternalId());
-                        //TODO: Fix me!
-                        //analysisResultRepository.save(result);
-                        //log.info("Analysis saved successfully for {}", answer.getExternalId());
+                        if (result != null) {
+                            result.setUtterance(answer);
+                            result.setAnalyzedAt(LocalDateTime.now());
+                            
+                            // Only save to DB if the utterance is not transient (has an ID)
+                            if (answer.getId() != null) {
+                                analysisResultRepository.save(result);
+                                log.info("Analysis saved successfully for {}", answer.getExternalId());
+                            } else {
+                                log.info("Analysis generated successfully (skipping DB save for transient utterance)");
+                                answer.setAnalysisResult(result);
+                            }
+                        }
                     }
                 }
             }
