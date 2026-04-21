@@ -18,15 +18,15 @@ public class APIGid {
      * Parses a speech ID in the format YYYY-MM-DD[letter].[number1].[number2]
      * e.g., 2026-01-21c.298.4
      *
-     * @param speechId The speech ID to parse
+     * @param gid The gid ID to parse
      * @return SpeechIdParts containing the separated components, or null if format doesn't match
      */
-    public static GIdParts parseGId(String speechId) {
-        if (speechId == null) {
+    public static GIdParts parseGId(String gid) {
+        if (gid == null) {
             return null;
         }
 
-        Matcher matcher = GID_PATTERN.matcher(speechId);
+        Matcher matcher = GID_PATTERN.matcher(gid);
         if (matcher.matches()) {
             return new GIdParts(
                     matcher.group(1),
