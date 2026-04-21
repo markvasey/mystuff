@@ -179,6 +179,7 @@ public class PMQsService {
     public List<Utterance> getUtterancesByDate(java.time.LocalDate date) {
         return utteranceRepository.findAll().stream()
                 .filter(u -> u.getDateTime() != null && u.getDateTime().toLocalDate().equals(date))
+                .filter(u -> u.getSpeakerId() != null) // Filter out null speakers
                 .sorted(Comparator.comparing(Utterance::getDateTime))
                 .collect(Collectors.toList());
     }

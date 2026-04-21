@@ -69,7 +69,8 @@
                                     <strong th:text="${u.speakerName != null ? u.speakerName : 'Unknown Speaker'}">Speaker</strong><br/>
                                     <span th:if="${u.party != null}" class="badge bg-light text-dark border party-badge" th:text="${u.party}">Party</span>
                                     <span class="small-meta" th:text="${u.house == '1' ? 'Commons' : (u.house == '2' ? 'Lords' : '')}">House</span>
-                                    <div class="office-tag text-primary" th:text="${u.office != null ? u.office : ''}">Office</div>
+                                    <div th:if="${u.office != null && !#strings.containsIgnoreCase(u.speakerName, 'Speaker') && !#strings.containsIgnoreCase(u.party, 'Speaker')}" 
+                                         class="office-tag text-primary" th:text="${u.office}">Office</div>
                                 </td>
                                 <td>
                                     <div class="small fw-bold text-uppercase text-muted" th:text="${u.debateType != null ? u.debateType : 'Unknown Type'}">Type</div>
