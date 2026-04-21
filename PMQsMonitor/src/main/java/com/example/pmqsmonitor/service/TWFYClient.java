@@ -48,21 +48,6 @@ public class TWFYClient {
                 .bodyToMono(String.class);
     }
 
-    public Mono<List<TWFYRow>> searchForPMQsHeader(String date) {
-        return webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("getDebates")
-                        .queryParam("type", "commons")
-                        .queryParam("date", date)
-                        .queryParam("search", "Engagements")
-                        .queryParam("output", "json")
-                        .queryParam("key", apiKey)
-                        .build())
-                .retrieve()
-                .bodyToMono(TWFYDebateResponse.class)
-                .map(res -> res != null && res.rows != null ? res.rows : List.<TWFYRow>of());
-    }
-
     /**
      * Get the full debate transcript for a specific GID.
      * Use bodyToMono(TWFYRow[].class) to correctly handle raw JSON arrays.
@@ -79,10 +64,6 @@ public class TWFYClient {
                 .retrieve()
                 .bodyToMono(TWFYRow[].class)
                 .map(Arrays::asList);
-    }
-
-    public Mono<List<TWFYRow>> getPMQs() {
-        return searchForPMQsHeader("2026-04-15");
     }
 
     public static class TWFYDebateResponse {

@@ -23,9 +23,6 @@
                 <form th:action="@{/scrape}" method="post">
                     <button type="submit" class="btn btn-outline-light">Scrape 2026</button>
                 </form>
-                <form th:action="@{/poll}" method="post">
-                    <button type="submit" class="btn btn-primary">Poll Latest</button>
-                </form>
             </div>
         </div>
     </nav>
@@ -94,7 +91,7 @@
                             </tr>
                             <tr th:if="${utterances.empty}">
                                 <td colspan="4" class="text-center py-5 text-muted">
-                                    No Wednesday data found. Click "Poll Now" to fetch the latest PMQs.
+                                    No Wednesday data found. Click "Scrape" to fetch the latest PMQs.
                                 </td>
                             </tr>
                         </tbody>

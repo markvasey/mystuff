@@ -24,11 +24,6 @@ public class DashboardController {
         return "dashboard";
     }
 
-    @PostMapping("/poll")
-    public String poll() {
-        pmqsService.pollNow();
-        return "redirect:/";
-    }
 
     @PostMapping("/scrape")
     public String scrape() {

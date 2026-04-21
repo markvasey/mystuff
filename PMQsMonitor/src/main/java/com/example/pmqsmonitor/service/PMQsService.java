@@ -36,38 +36,6 @@ public class PMQsService {
     }
 
     @Transactional
-    public void pollNow() {
-        // Step 1: Find the most recent Wednesday
-        LocalDate lastWednesday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.WEDNESDAY));
-        String dateStr = lastWednesday.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        
-        log.info("Polling TheyWorkForYou for PMQs header on {}", dateStr);
-        
-        twfyClient.searchForPMQsHeader(dateStr)
-                .flatMap(rows -> {
-                    // Step 2: Look for the specific "Prime Minister" engagements entry to get the GID
-                    Optional<TWFYClient.TWFYRow> pmqsHeader = rows.stream()
-                            .filter(r -> r.body != null && r.body.contains("Prime Minister"))
-                            .findFirst();
-
-                    if (pmqsHeader.isPresent()) {
-                        String gid = pmqsHeader.get().gid;
-                        log.info("Found PMQs session GID: {}. Fetching full debate...", gid);
-                        return twfyClient.getFullDebateByGid(gid);
-                    } else {
-                        log.warn("Could not find PMQs header (body: 'Prime Minister') for {}", dateStr);
-                        return reactor.core.publisher.Mono.just(List.<TWFYClient.TWFYRow>of());
-                    }
-                })
-                .doOnNext(fullDebate -> {
-                    if (!fullDebate.isEmpty()) {
-                        processRows(fullDebate);
-                    }
-                })
-                .block();
-    }
-
-    @Transactional
     public void pollNowWithGid(String gid, List<TWFYClient.TWFYRow> rows) {
         log.info("Manual poll triggered for GID: {} ({} rows)", gid, rows.size());
         processRows(rows);
