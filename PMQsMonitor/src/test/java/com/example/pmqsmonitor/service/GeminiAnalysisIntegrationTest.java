@@ -40,7 +40,7 @@ class GeminiAnalysisIntegrationTest {
         assertNotNull(answer.getAnalysisResult(), "Analysis result should be populated");
         System.out.println("ANALYSIS SUCCESSFUL!");
 
-        assertFalse("Defensive",answer.getAnalysisResult().getSentiment().isEmpty());
+        assertFalse(answer.getAnalysisResult().getSentiment().isEmpty());
         assertTrue(answer.getAnalysisResult().getCompleteness()>0);
         assertFalse(answer.getAnalysisResult().getRational().isEmpty());
 
