@@ -1,5 +1,6 @@
 package com.example.pmqsmonitor.service;
 
+import com.example.pmqsmonitor.util.APIGid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 public class HistoricalScraperService {
@@ -91,7 +91,9 @@ public class HistoricalScraperService {
 
         while (m.find()) {
             String speechId = m.group(1);
+
             String apiGid = speechId.replace("uk.org.publicwhip/debate/", "");
+            apiGid = APIGid.incrementNumber2(APIGid.parseGId(apiGid)).toString();
             gids.add(apiGid);
             
             log.info("Found PMQs Speech GID: {}", apiGid);
