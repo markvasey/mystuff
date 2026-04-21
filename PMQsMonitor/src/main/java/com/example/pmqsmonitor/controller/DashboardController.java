@@ -19,9 +19,20 @@ public class DashboardController {
     }
 
     @GetMapping("/")
-    public String dashboard(@org.springframework.web.bind.annotation.RequestParam(required = false) String date, Model model) {
+    public String dashboard(@org.springframework.web.bind.annotation.RequestParam(required = false) String date, 
+                            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean hideSpeaker,
+                            @org.springframework.web.bind.annotation.RequestParam(required = false) String filterApplied,
+                            Model model) {
         java.util.List<java.time.LocalDate> availableDates = pmqsService.getAvailableDates();
         model.addAttribute("availableDates", availableDates);
+
+        // Logic: Default to true on first load. On form submission (filterApplied=true), 
+        // if hideSpeaker is null, it means it was unchecked.
+        boolean actualHideSpeaker = true;
+        if ("true".equals(filterApplied)) {
+            actualHideSpeaker = (hideSpeaker != null && hideSpeaker);
+        }
+        model.addAttribute("hideSpeaker", actualHideSpeaker);
 
         java.time.LocalDate selectedDate;
         if (date != null && !date.isEmpty()) {
@@ -34,7 +45,7 @@ public class DashboardController {
 
         model.addAttribute("selectedDate", selectedDate);
         if (selectedDate != null) {
-            model.addAttribute("utterances", pmqsService.getUtterancesByDate(selectedDate));
+            model.addAttribute("utterances", pmqsService.getUtterancesByDate(selectedDate, actualHideSpeaker));
         } else {
             model.addAttribute("utterances", java.util.List.of());
         }

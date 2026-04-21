@@ -176,10 +176,11 @@ public class PMQsService {
                 .collect(Collectors.toList());
     }
 
-    public List<Utterance> getUtterancesByDate(java.time.LocalDate date) {
+    public List<Utterance> getUtterancesByDate(java.time.LocalDate date, boolean hideSpeaker) {
         return utteranceRepository.findAll().stream()
                 .filter(u -> u.getDateTime() != null && u.getDateTime().toLocalDate().equals(date))
-                .filter(u -> u.getSpeakerId() != null) // Filter out null speakers
+                .filter(u -> u.getSpeakerId() != null) 
+                .filter(u -> !hideSpeaker || (u.getParty() != null && !u.getParty().equalsIgnoreCase("Speaker")))
                 .sorted(Comparator.comparing(Utterance::getDateTime))
                 .collect(Collectors.toList());
     }

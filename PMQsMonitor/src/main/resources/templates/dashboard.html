@@ -20,15 +20,26 @@
         <div class="container">
             <span class="navbar-brand mb-0 h1">Hansard PMQs Monitor & Analyser</span>
             <div class="d-flex gap-2 align-items-center">
-                <form th:action="@{/}" method="get" class="d-flex gap-2 align-items-center me-3">
-                    <label for="dateSelect" class="text-white small mb-0">Select Wednesday:</label>
-                    <select id="dateSelect" name="date" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="" th:if="${availableDates.empty}">No dates available</option>
-                        <option th:each="d : ${availableDates}" 
-                                th:value="${d}" 
-                                th:text="${#temporals.format(d, 'dd MMM yyyy')}"
-                                th:selected="${d == selectedDate}">Date</option>
-                    </select>
+                <form th:action="@{/}" method="get" class="d-flex gap-3 align-items-center me-3">
+                    <!-- Hidden marker to indicate form submission -->
+                    <input type="hidden" name="filterApplied" value="true">
+                    
+                    <div class="d-flex gap-2 align-items-center">
+                        <label for="dateSelect" class="text-white small mb-0">Wednesday:</label>
+                        <select id="dateSelect" name="date" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="" th:if="${availableDates.empty}">No dates available</option>
+                            <option th:each="d : ${availableDates}" 
+                                    th:value="${d}" 
+                                    th:text="${#temporals.format(d, 'dd MMM yyyy')}"
+                                    th:selected="${d == selectedDate}">Date</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="hideSpeakerCheck" name="hideSpeaker" 
+                               th:checked="${hideSpeaker}" onchange="this.form.submit()">
+                        <label class="form-check-input-label text-white small" for="hideSpeakerCheck">Hide Speaker</label>
+                    </div>
                 </form>
                 <form th:action="@{/scrape}" method="post">
                     <button type="submit" class="btn btn-outline-light btn-sm">Scrape 2026</button>
