@@ -187,6 +187,24 @@ public class PMQsService {
         return mergeConsecutiveUtterances(rawList);
     }
 
+    @Transactional
+    public void analyzeSession(java.time.LocalDate date, boolean hideSpeaker) {
+        List<Utterance> utterances = getUtterancesByDate(date, hideSpeaker);
+        log.info("Analyzing session for {}: {} merged utterances", date, utterances.size());
+
+        Utterance lastQuestion = null;
+        for (Utterance utterance : utterances) {
+            if (utterance.isStarmer() || utterance.isRepresentative()) {
+                if (lastQuestion != null && "question".equals(lastQuestion.getType())) {
+                    log.info("Triggering AI analysis for answer to question from {}", lastQuestion.getSpeakerName());
+                    analysisService.analyzeUtterance(lastQuestion, utterance);
+                }
+            } else if ("question".equals(utterance.getType())) {
+                lastQuestion = utterance;
+            }
+        }
+    }
+
     private List<Utterance> mergeConsecutiveUtterances(List<Utterance> utterances) {
         if (utterances == null || utterances.isEmpty()) {
             return utterances;

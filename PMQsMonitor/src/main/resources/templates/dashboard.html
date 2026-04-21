@@ -41,6 +41,11 @@
                         <label class="form-check-input-label text-white small" for="hideSpeakerCheck">Hide Speaker</label>
                     </div>
                 </form>
+                <form th:action="@{/analyze}" method="post" th:if="${selectedDate != null}" class="ms-3">
+                    <input type="hidden" name="date" th:value="${selectedDate}">
+                    <input type="hidden" name="hideSpeaker" th:value="${hideSpeaker}">
+                    <button type="submit" class="btn btn-info btn-sm">Analyze Session</button>
+                </form>
                 <form th:action="@{/scrape}" method="post">
                     <button type="submit" class="btn btn-outline-light btn-sm">Scrape 2026</button>
                 </form>

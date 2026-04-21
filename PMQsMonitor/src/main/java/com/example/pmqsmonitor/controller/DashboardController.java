@@ -58,4 +58,13 @@ public class DashboardController {
         historicalScraperService.scrape2026();
         return "redirect:/";
     }
+
+    @PostMapping("/analyze")
+    public String analyze(@org.springframework.web.bind.annotation.RequestParam String date,
+                          @org.springframework.web.bind.annotation.RequestParam(defaultValue = "true") boolean hideSpeaker) {
+        if (date != null && !date.isEmpty()) {
+            pmqsService.analyzeSession(java.time.LocalDate.parse(date), hideSpeaker);
+        }
+        return "redirect:/?date=" + date + "&hideSpeaker=" + hideSpeaker + "&filterApplied=true";
+    }
 }
