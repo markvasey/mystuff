@@ -19,9 +19,14 @@
     <nav class="navbar navbar-dark bg-dark mb-4">
         <div class="container">
             <span class="navbar-brand mb-0 h1">Hansard PMQs Monitor & Analyser</span>
-            <form th:action="@{/poll}" method="post">
-                <button type="submit" class="btn btn-primary">Poll Now</button>
-            </form>
+            <div class="d-flex gap-2">
+                <form th:action="@{/scrape}" method="post">
+                    <button type="submit" class="btn btn-outline-light">Scrape 2026</button>
+                </form>
+                <form th:action="@{/poll}" method="post">
+                    <button type="submit" class="btn btn-primary">Poll Latest</button>
+                </form>
+            </div>
         </div>
     </nav>
 

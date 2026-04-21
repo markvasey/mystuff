@@ -1,6 +1,7 @@
 package com.example.pmqsmonitor.controller;
 
 import com.example.pmqsmonitor.service.PMQsService;
+import com.example.pmqsmonitor.service.HistoricalScraperService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,9 +11,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 public class DashboardController {
 
     private final PMQsService pmqsService;
+    private final HistoricalScraperService historicalScraperService;
 
-    public DashboardController(PMQsService pmqsService) {
+    public DashboardController(PMQsService pmqsService, HistoricalScraperService historicalScraperService) {
         this.pmqsService = pmqsService;
+        this.historicalScraperService = historicalScraperService;
     }
 
     @GetMapping("/")
@@ -24,6 +27,12 @@ public class DashboardController {
     @PostMapping("/poll")
     public String poll() {
         pmqsService.pollNow();
+        return "redirect:/";
+    }
+
+    @PostMapping("/scrape")
+    public String scrape() {
+        historicalScraperService.scrape2026();
         return "redirect:/";
     }
 }

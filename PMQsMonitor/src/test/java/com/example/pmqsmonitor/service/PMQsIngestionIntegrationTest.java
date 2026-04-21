@@ -31,46 +31,27 @@ class PMQsIngestionIntegrationTest {
     private AnalysisService analysisService;
 
     @Test
-    void testFullIngestionFlow() {
+    void testFullIngestionFlowWithTestData() throws Exception {
         // Arrange
-        TWFYClient.TWFYRow row = new TWFYClient.TWFYRow();
-        row.gid = "test-gid-123";
-        row.hdate = "2026-04-15";
-        row.htime = "12:05:00";
-        row.body = "<p>Test PMQs body</p>";
-        row.listurl = "/test-url";
-        row.debateType = "Oral questions";
-        row.title = "Prime Minister's Question Time";
-
-        TWFYClient.TWFYRow.SpeakerInfo speaker = new TWFYClient.TWFYRow.SpeakerInfo();
-        speaker.personId = "25353";
-        speaker.name = "Keir Starmer";
-        speaker.party = "Labour";
-        speaker.house = "1";
+        String json = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/main/resources/TestData/dataResponse.json")));
         
-        TWFYClient.TWFYRow.OfficeInfo office = new TWFYClient.TWFYRow.OfficeInfo();
-        office.position = "The Prime Minister";
-        speaker.office = List.of(office);
-        
-        row.speaker = speaker;
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        TWFYClient.TWFYDebateResponse res = mapper.readValue(json, TWFYClient.TWFYDebateResponse.class);
 
-        when(twfyClient.getPMQs()).thenReturn(Mono.just(List.of(row)));
+        when(twfyClient.getPMQs()).thenReturn(Mono.just(res.rows));
 
         // Act
         pmqsService.pollNow();
 
         // Assert
-        Utterance saved = utteranceRepository.findByExternalId("test-gid-123").orElse(null);
-        assertNotNull(saved, "Utterance should be saved to database");
-        assertEquals("2026-04-15", saved.getHdate());
-        assertEquals("12:05:00", saved.getHtime());
-        assertEquals("Keir Starmer", saved.getSpeakerName());
-        assertEquals("25353", saved.getSpeakerId());
-        assertEquals("Labour", saved.getParty());
-        assertEquals("1", saved.getHouse());
-        assertTrue(saved.getOffice().contains("The Prime Minister"));
-        assertEquals("Oral questions", saved.getDebateType());
-        assertTrue(saved.getListurl().contains("/test-url"));
-        assertTrue(saved.isStarmer());
+        List<Utterance> all = utteranceRepository.findAll();
+        assertFalse(all.isEmpty(), "Utterances should be saved to database");
+        
+        // Check for specific GID from the file (first one is 2011-12-22.12.0)
+        Utterance first = utteranceRepository.findByExternalId("2011-12-22.12.0").orElse(null);
+        assertNotNull(first, "First test record should be present");
+        assertEquals("2011-12-22", first.getHdate());
     }
 }

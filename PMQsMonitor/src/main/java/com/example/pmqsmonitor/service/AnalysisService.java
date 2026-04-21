@@ -27,9 +27,14 @@ public class AnalysisService {
             return;
         }
 
+        String qName = question.getSpeakerName() != null ? question.getSpeakerName() : "Unknown MP";
+        String qText = question.getText() != null ? question.getText() : "[No question text available]";
+        String aName = answer.getSpeakerName() != null ? answer.getSpeakerName() : "The Respondent";
+        String aText = answer.getText() != null ? answer.getText() : "[No answer text available]";
+
         String prompt = """
                 You are an expert political analyst. Analyze the following Prime Minister's Questions (PMQs) exchange.
-                Focus specifically on the completeness and relevance of the answer given by Keir Starmer.
+                Focus specifically on the completeness and relevance of the answer given by %s.
                 
                 Question from %s: %s
                 Answer from %s: %s
@@ -46,9 +51,7 @@ public class AnalysisService {
                 - rational: String (detailed explanation for your scores)
                 """;
 
-        String formattedPrompt = String.format(prompt, 
-                question.getSpeakerName(), question.getText(), 
-                answer.getSpeakerName(), answer.getText());
+        String formattedPrompt = String.format(prompt, aName, qName, qText, aName, aText);
 
         AnalysisResult result = chatClient.prompt()
                 .user(formattedPrompt)

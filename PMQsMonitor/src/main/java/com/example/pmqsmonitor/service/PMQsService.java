@@ -7,10 +7,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -35,44 +37,56 @@ public class PMQsService {
 
     @Transactional
     public void pollNow() {
-        log.info("Polling TheyWorkForYou for new PMQs...");
-        twfyClient.getPMQs()
-                .doOnNext(rows -> {
-                    if (rows != null) {
-                        processRows(rows);
+        // Step 1: Find the most recent Wednesday
+        LocalDate lastWednesday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.WEDNESDAY));
+        String dateStr = lastWednesday.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        log.info("Polling TheyWorkForYou for PMQs header on {}", dateStr);
+        
+        twfyClient.searchForPMQsHeader(dateStr)
+                .flatMap(rows -> {
+                    // Step 2: Look for the specific "Prime Minister" engagements entry to get the GID
+                    Optional<TWFYClient.TWFYRow> pmqsHeader = rows.stream()
+                            .filter(r -> r.body != null && r.body.contains("Prime Minister"))
+                            .findFirst();
+
+                    if (pmqsHeader.isPresent()) {
+                        String gid = pmqsHeader.get().gid;
+                        log.info("Found PMQs session GID: {}. Fetching full debate...", gid);
+                        return twfyClient.getFullDebateByGid(gid);
+                    } else {
+                        log.warn("Could not find PMQs header (body: 'Prime Minister') for {}", dateStr);
+                        return reactor.core.publisher.Mono.just(List.<TWFYClient.TWFYRow>of());
+                    }
+                })
+                .doOnNext(fullDebate -> {
+                    if (!fullDebate.isEmpty()) {
+                        processRows(fullDebate);
                     }
                 })
                 .block();
     }
 
+    @Transactional
+    public void pollNowWithGid(String gid, List<TWFYClient.TWFYRow> rows) {
+        log.info("Manual poll triggered for GID: {} ({} rows)", gid, rows.size());
+        processRows(rows);
+    }
+
     private void processRows(List<TWFYClient.TWFYRow> rows) {
-        log.info("Processing {} rows from API", rows.size());
+        log.info("Processing {} rows from full debate transcript", rows.size());
         
         try {
             List<TWFYClient.TWFYRow> sortedRows = rows.stream()
-                    .sorted(Comparator.comparing((TWFYClient.TWFYRow r) -> r.hdate)
+                    .sorted(Comparator.comparing((TWFYClient.TWFYRow r) -> r.hdate != null ? r.hdate : "")
                             .thenComparing(r -> r.htime, Comparator.nullsLast(Comparator.naturalOrder())))
                     .collect(Collectors.toList());
 
             Utterance lastQuestion = null;
 
             for (TWFYClient.TWFYRow row : sortedRows) {
-                if (row.body == null) continue;
+                if (row.body == null || row.body.trim().isEmpty()) continue;
 
-                // 1. FILTER FIRST: Only process PMQs
-                String title = row.title != null ? row.title : 
-                              (row.parent != null ? row.parent.body : "");
-                
-                boolean isPMQ = row.listurl.contains("s=Prime+Minister%27s+Questions");
-
-                if (!isPMQ) {
-                    log.debug("Skipping non-PMQ row: GID={}, Title={}", row.gid, title);
-                    continue;
-                }
-                
-                log.debug("Processing valid PMQ row: GID={}, Title={}", row.gid, title);
-
-                // 2. MAP & SAVE
                 String gid = row.gid;
                 Optional<Utterance> existing = utteranceRepository.findByExternalId(gid);
                 
@@ -81,31 +95,26 @@ public class PMQsService {
                     utterance = existing.get();
                     updateMetadata(utterance, row);
                     utterance = utteranceRepository.save(utterance);
-                    log.debug("Updated PMQ record: {}", gid);
                 } else {
                     utterance = mapToUtterance(row);
+                    // Determine type: default to question, unless it's Starmer
                     utterance.setType(utterance.isStarmer() || utterance.isRepresentative() ? "answer" : "question");
                     utterance = utteranceRepository.save(utterance);
-                    log.debug("Saved new PMQ utterance: {}, Starmer: {}", gid, utterance.isStarmer());
+                    log.debug("Saved new utterance: {}, Starmer: {}", gid, utterance.isStarmer());
                 }
 
-                // 3. TRIGGER ANALYSIS
+                // Trigger Analysis logic
                 if (utterance.isStarmer() || utterance.isRepresentative()) {
-                    if (row.parent != null) {
-                        Utterance question = utteranceRepository.findByExternalId(row.parent.gid)
-                                .orElseGet(() -> {
-                                    Utterance q = mapToUtterance(row.parent);
-                                    q.setType("question");
-                                    return utteranceRepository.save(q);
-                                });
-                        log.info("Analyzing answer to parent question from {}", question.getSpeakerName());
-                        analysisService.analyzeUtterance(question, utterance);
-                    } else if (lastQuestion != null && !"answer".equals(lastQuestion.getType())) {
-                        log.info("Analyzing answer to chronological question from {}", lastQuestion.getSpeakerName());
+                    if (lastQuestion != null && !"answer".equals(lastQuestion.getType())) {
+                        String qName = lastQuestion.getSpeakerName() != null ? lastQuestion.getSpeakerName() : "Unknown MP";
+                        log.info("Analyzing answer to question from {}", qName);
                         analysisService.analyzeUtterance(lastQuestion, utterance);
                     }
                 } else {
-                    lastQuestion = utterance;
+                    // Logic: If it's not Starmer and it's not procedural, it's a question
+                    if (utterance.getSpeakerName() != null && !utterance.getSpeakerName().contains("Speaker")) {
+                        lastQuestion = utterance;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -129,9 +138,13 @@ public class PMQsService {
             
             if (row.speaker.office != null && !row.speaker.office.isEmpty()) {
                 u.setOffice(row.speaker.office.stream()
-                        .map(o -> o.position + (o.dept != null ? " (" + o.dept + ")" : ""))
+                        .map(o -> o.position + (o.dept != null && !o.dept.isEmpty() ? " (" + o.dept + ")" : ""))
                         .collect(Collectors.joining(", ")));
             }
+        }
+        
+        if (u.getSpeakerName() == null && row.title != null) {
+             u.setSpeakerName(row.title);
         }
         
         if (row.parent != null) {
@@ -172,21 +185,21 @@ public class PMQsService {
             
             if (row.speaker.office != null && !row.speaker.office.isEmpty()) {
                 u.setOffice(row.speaker.office.stream()
-                        .map(o -> o.position + (o.dept != null ? " (" + o.dept + ")" : ""))
+                        .map(o -> o.position + (o.dept != null && !o.dept.isEmpty() ? " (" + o.dept + ")" : ""))
                         .collect(Collectors.joining(", ")));
             }
         }
         
-        if (row.parent != null) {
+        if (row.parent != null && u.getParentBody() == null) {
             u.setParentBody(row.parent.body);
         }
     }
 
     public List<Utterance> getLatestPMQs() {
         return utteranceRepository.findAll().stream()
-                .filter(u -> u.getDateTime() != null && u.getDateTime().getDayOfWeek() == java.time.DayOfWeek.WEDNESDAY)
+                .filter(u -> u.getDateTime() != null && u.getDateTime().getDayOfWeek() == DayOfWeek.WEDNESDAY)
                 .sorted(Comparator.comparing(Utterance::getDateTime).reversed())
-                .limit(100)
+                .limit(200)
                 .collect(Collectors.toList());
     }
 }
