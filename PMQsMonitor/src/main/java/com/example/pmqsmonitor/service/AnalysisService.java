@@ -124,7 +124,7 @@ public class AnalysisService {
         String summaryPrompt = String.format("""
                 You are a senior political editor. Below is a list of AI-generated rationales analyzing individual answers from a Prime Minister's Questions (PMQs) session.
                 
-                Please provide a concise "Executive Summary" (2-3 paragraphs) of the Prime Minister's performance in this session based on these analyses. 
+                Please provide a concise "Executive Summary" (MAXIMUM 200 WORDS) of the Prime Minister's performance in this session based on these analyses. 
                 Focus on recurring themes, the overall tone (e.g., was it a defensive or confident session?), and identify if there were specific topics where the PM was particularly evasive or informative.
                 
                 RATIONALES TO SUMMARIZE:
