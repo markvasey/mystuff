@@ -70,7 +70,10 @@
                         <button class="nav-link active" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript-view" type="button" role="tab">Full Transcript</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-view" type="button" role="tab">AI Analysis Results</button>
+                        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-view" type="button" role="tab">Detailed Analysis</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-view" type="button" role="tab">Summary Analysis</button>
                     </li>
                 </ul>
             </div>
@@ -105,7 +108,7 @@
                     </div>
                 </div>
 
-                <!-- Analysis View -->
+                <!-- Detailed Analysis View -->
                 <div class="tab-pane fade" id="analysis-view" role="tabpanel">
                     <div class="p-4">
                         <div th:each="u : ${utterances}" th:if="${u.analysisResult != null}" class="card mb-4 border-start border-4 border-info shadow-sm">
@@ -115,8 +118,7 @@
                                         <h6 class="text-muted text-uppercase small fw-bold">MP Question</h6>
                                         <p class="small italic" th:text="'ID: ' + ${u.externalId}">ID</p>
                                         <div class="mb-3">
-                                            <span class="badge bg-secondary mb-2" th:text="'In response to: ' + ${u.speakerName}">MP</span>
-                                            <!-- Logic to find the question is tricky in UI, but we know it's the previous utterance -->
+                                            <span class="badge bg-secondary mb-2" th:text="'Answered by: ' + ${u.speakerName}">Respondent</span>
                                         </div>
                                         
                                         <h6 class="text-muted text-uppercase small fw-bold mt-4">AI Metrics</h6>
@@ -157,28 +159,71 @@
                                                     </ul>
                                                 </div>
                                             </div>
-                                            
-                                            <div class="mt-3 pt-2 border-top" th:if="${!u.analysisResult.diversionTactics.isEmpty()}">
-                                                <strong class="small text-muted">Diversion Tactics Noted:</strong>
-                                                <div class="mt-1">
-                                                    <span th:each="t : ${u.analysisResult.diversionTactics}" class="badge bg-warning text-dark me-1" th:text="${t}">Tactic</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="mt-3">
-                                            <h6 class="text-muted text-uppercase small fw-bold">Transcript Analyzed</h6>
-                                            <div class="small text-muted p-2 bg-light rounded" th:utext="${u.text}">Full answer text...</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div th:if="${utterances.?[analysisResult != null].empty}" class="text-center py-5">
-                            <p class="text-muted">No analysis results found for this session.</p>
-                            <p class="small">Click the <strong>"Analyze Session"</strong> button above to generate AI evaluations.</p>
-                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Analysis Table View -->
+                <div class="tab-pane fade" id="summary-view" role="tabpanel">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Respondent</th>
+                                    <th>Sentiment</th>
+                                    <th>Completeness</th>
+                                    <th>Relevance</th>
+                                    <th>Direct?</th>
+                                    <th>Key Diversions</th>
+                                    <th>Rational Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="u : ${utterances}" th:if="${u.analysisResult != null}">
+                                    <td>
+                                        <strong th:text="${u.speakerName}">Starmer</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info text-dark" th:text="${u.analysisResult.sentiment}">Sentiment</span>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 th:style="'width: ' + ${u.analysisResult.completeness} + '%;'"
+                                                 th:classappend="${u.analysisResult.completeness > 70 ? 'bg-success' : (u.analysisResult.completeness > 40 ? 'bg-warning' : 'bg-danger')}"
+                                                 th:text="${u.analysisResult.completeness} + '%'"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 th:style="'width: ' + ${u.analysisResult.relevance} + '%;'"
+                                                 th:classappend="${u.analysisResult.relevance > 70 ? 'bg-success' : (u.analysisResult.relevance > 40 ? 'bg-warning' : 'bg-danger')}"
+                                                 th:text="${u.analysisResult.relevance} + '%'"></div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span th:if="${u.analysisResult.isDirectAnswer}" class="text-success">✅</span>
+                                        <span th:unless="${u.analysisResult.isDirectAnswer}" class="text-danger">❌</span>
+                                    </td>
+                                    <td>
+                                        <span th:each="t : ${u.analysisResult.diversionTactics}" class="badge bg-light text-dark border me-1 small" th:text="${t}">Tactic</span>
+                                    </td>
+                                    <td>
+                                        <small th:text="${#strings.abbreviate(u.analysisResult.rational, 150)}">Summary...</small>
+                                    </td>
+                                </tr>
+                                <tr th:if="${utterances.?[analysisResult != null].empty}">
+                                    <td colspan="7" class="text-center py-5 text-muted">
+                                        No analysis summaries available. Run "Analyze Session" to generate data.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
