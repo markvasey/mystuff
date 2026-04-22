@@ -4,6 +4,7 @@
     <title>PMQs Monitor & Analyser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .score-badge { font-size: 0.85em; padding: 0.3em 0.6em; }
         .rational-box { font-size: 0.9em; background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 12px; margin-top: 10px; border-radius: 4px; }
@@ -16,6 +17,9 @@
         .party-badge { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; }
         .nav-tabs .nav-link { color: #495057; font-weight: 500; }
         .nav-tabs .nav-link.active { font-weight: 700; color: #0d6efd; }
+        .stat-card { border-radius: 10px; border: none; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .summary-text { line-height: 1.6; font-size: 1.05em; color: #2c3e50; }
     </style>
 </head>
 <body class="bg-light">
@@ -73,7 +77,10 @@
                         <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-view" type="button" role="tab">Detailed Analysis</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-view" type="button" role="tab">Summary Analysis</button>
+                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-view" type="button" role="tab">Analysis Grid</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="session-summary-tab" data-bs-toggle="tab" data-bs-target="#session-summary-view" type="button" role="tab">Session Summary</button>
                     </li>
                 </ul>
             </div>
@@ -167,7 +174,7 @@
                     </div>
                 </div>
 
-                <!-- Summary Analysis Table View -->
+                <!-- Analysis Grid -->
                 <div class="tab-pane fade" id="summary-view" role="tabpanel">
                     <div class="table-responsive">
                         <table class="table table-striped table-hover mb-0">
@@ -184,12 +191,8 @@
                             </thead>
                             <tbody>
                                 <tr th:each="u : ${utterances}" th:if="${u.analysisResult != null}">
-                                    <td>
-                                        <strong th:text="${u.speakerName}">Starmer</strong>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info text-dark" th:text="${u.analysisResult.sentiment}">Sentiment</span>
-                                    </td>
+                                    <td><strong th:text="${u.speakerName}">Starmer</strong></td>
+                                    <td><span class="badge bg-info text-dark" th:text="${u.analysisResult.sentiment}">Sentiment</span></td>
                                     <td>
                                         <div class="progress" style="height: 20px;">
                                             <div class="progress-bar" role="progressbar" 
@@ -210,20 +213,101 @@
                                         <span th:if="${u.analysisResult.isDirectAnswer}" class="text-success">✅</span>
                                         <span th:unless="${u.analysisResult.isDirectAnswer}" class="text-danger">❌</span>
                                     </td>
-                                    <td>
-                                        <span th:each="t : ${u.analysisResult.diversionTactics}" class="badge bg-light text-dark border me-1 small" th:text="${t}">Tactic</span>
-                                    </td>
-                                    <td>
-                                        <small th:text="${#strings.abbreviate(u.analysisResult.rational, 150)}">Summary...</small>
-                                    </td>
-                                </tr>
-                                <tr th:if="${utterances.?[analysisResult != null].empty}">
-                                    <td colspan="7" class="text-center py-5 text-muted">
-                                        No analysis summaries available. Run "Analyze Session" to generate data.
-                                    </td>
+                                    <td><span th:each="t : ${u.analysisResult.diversionTactics}" class="badge bg-light text-dark border me-1 small" th:text="${t}">Tactic</span></td>
+                                    <td><small th:text="${#strings.abbreviate(u.analysisResult.rational, 150)}">Summary...</small></td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Session Summary View -->
+                <div class="tab-pane fade" id="session-summary-view" role="tabpanel">
+                    <div class="p-4" th:if="${sessionSummary != null}">
+                        <div class="row mb-4">
+                            <div class="col-md-8">
+                                <div class="card h-100 border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <h5 class="card-title text-primary border-bottom pb-2 mb-3">AI Executive Summary</h5>
+                                        <div class="summary-text" th:utext="${#strings.replace(sessionSummary.executiveSummary, '\n', '<br/>')}">
+                                            Summary will appear here...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 shadow-sm">
+                                    <div class="card-body">
+                                        <h5 class="card-title text-center mb-4">Sentiment Distribution</h5>
+                                        <canvas id="sentimentChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-3">
+                                <div class="card stat-card bg-primary text-white p-3 text-center">
+                                    <div class="small">Questions Analyzed</div>
+                                    <h2 class="mb-0" th:text="${sessionSummary.totalAnalyzed}">0</h2>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stat-card bg-success text-white p-3 text-center">
+                                    <div class="small">Direct Answers</div>
+                                    <h2 class="mb-0" th:text="${sessionSummary.directAnswers}">0</h2>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stat-card bg-warning text-dark p-3 text-center">
+                                    <div class="small">Avg Completeness</div>
+                                    <h2 class="mb-0" th:text="${#numbers.formatDecimal(sessionSummary.avgCompleteness, 1, 1)} + '%'">0%</h2>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stat-card bg-info text-dark p-3 text-center">
+                                    <div class="small">Avg Relevance</div>
+                                    <h2 class="mb-0" th:text="${#numbers.formatDecimal(sessionSummary.avgRelevance, 1, 1)} + '%'">0%</h2>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body">
+                                        <h5 class="card-title border-bottom pb-2 mb-3">Common Diversion Tactics</h5>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <div th:each="entry : ${sessionSummary.diversionCounts}" class="badge bg-light text-dark border p-2">
+                                                <span th:text="${entry.key}" class="fw-bold">Tactic</span>
+                                                <span class="badge bg-secondary ms-2" th:text="${entry.value}">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Initialize Chart -->
+                        <script th:inline="javascript">
+                            const ctx = document.getElementById('sentimentChart').getContext('2d');
+                            const sentimentData = /*[[${sessionSummary.sentimentCounts}]]*/ {};
+                            
+                            new Chart(ctx, {
+                                type: 'pie',
+                                data: {
+                                    labels: Object.keys(sentimentData),
+                                    datasets: [{
+                                        data: Object.values(sentimentData),
+                                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#0dcaf0', '#6610f2']
+                                    }]
+                                },
+                                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                            });
+                        </script>
+                    </div>
+                    <div th:unless="${sessionSummary != null}" class="text-center py-5">
+                        <p class="text-muted">No summary data available yet. Please run "Analyze Session" first.</p>
                     </div>
                 </div>
             </div>

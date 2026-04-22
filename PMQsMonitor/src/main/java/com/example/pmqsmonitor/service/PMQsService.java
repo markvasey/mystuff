@@ -1,5 +1,6 @@
 package com.example.pmqsmonitor.service;
 
+import com.example.pmqsmonitor.model.AnalysisResult;
 import com.example.pmqsmonitor.model.Utterance;
 import com.example.pmqsmonitor.repository.UtteranceRepository;
 import org.slf4j.Logger;
@@ -12,8 +13,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -89,7 +92,7 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : null);
-        
+
         // Fix: Default to Oral questions for PMQs
         u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
@@ -110,7 +113,6 @@ public class PMQsService {
              u.setSpeakerName(row.title);
         }
         
-        // Fix: Ensure parentBody is set
         if (row.parent != null) {
             u.setParentBody(row.parent.body);
         } else if (u.getParentBody() == null) {
@@ -141,7 +143,7 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : u.getListurl());
-        
+
         // Fix: Default to Oral questions
         u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
@@ -161,7 +163,7 @@ public class PMQsService {
         if (u.getSpeakerName() == null && row.title != null) {
             u.setSpeakerName(row.title);
         }
-        
+
         // Fix: Ensure parentBody is set
         if (row.parent != null) {
             u.setParentBody(row.parent.body);
@@ -185,6 +187,34 @@ public class PMQsService {
                 .collect(Collectors.toList());
 
         return mergeConsecutiveUtterances(rawList);
+    }
+
+    public SessionSummary getSessionSummary(java.time.LocalDate date, boolean hideSpeaker) {
+        List<Utterance> utterances = getUtterancesByDate(date, hideSpeaker);
+        List<AnalysisResult> results = utterances.stream()
+                .map(Utterance::getAnalysisResult)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+
+        if (results.isEmpty()) return null;
+
+        SessionSummary summary = new SessionSummary();
+        summary.totalAnalyzed = results.size();
+        summary.avgCompleteness = results.stream().mapToInt(AnalysisResult::getCompleteness).average().orElse(0);
+        summary.avgRelevance = results.stream().mapToInt(AnalysisResult::getRelevance).average().orElse(0);
+        summary.directAnswers = (int) results.stream().filter(AnalysisResult::isDirectAnswer).count();
+        
+        summary.sentimentCounts = results.stream()
+                .collect(Collectors.groupingBy(AnalysisResult::getSentiment, Collectors.counting()));
+
+        summary.diversionCounts = results.stream()
+                .flatMap(r -> r.getDiversionTactics().stream())
+                .collect(Collectors.groupingBy(t -> t, Collectors.counting()));
+
+        List<String> rationales = results.stream().map(AnalysisResult::getRational).collect(Collectors.toList());
+        summary.executiveSummary = analysisService.summarizeRationales(rationales);
+
+        return summary;
     }
 
     @Transactional
@@ -220,7 +250,7 @@ public class PMQsService {
             } else if (u.getSpeakerId().equals(current.getSpeakerId())) {
                 // Merge logic: Combine text and keep the analysis from either if present
                 current.setText(current.getText() + "<br/><br/>" + u.getText());
-                
+
                 // If the new one has an analysis result and current doesn't, take it
                 if (current.getAnalysisResult() == null && u.getAnalysisResult() != null) {
                     current.setAnalysisResult(u.getAnalysisResult());
@@ -254,5 +284,15 @@ public class PMQsService {
         clone.setRepresentative(u.isRepresentative());
         clone.setAnalysisResult(u.getAnalysisResult());
         return clone;
+    }
+
+    public static class SessionSummary {
+        public int totalAnalyzed;
+        public double avgCompleteness;
+        public double avgRelevance;
+        public int directAnswers;
+        public Map<String, Long> sentimentCounts;
+        public Map<String, Long> diversionCounts;
+        public String executiveSummary;
     }
 }

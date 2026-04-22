@@ -46,6 +46,7 @@ public class DashboardController {
         model.addAttribute("selectedDate", selectedDate);
         if (selectedDate != null) {
             model.addAttribute("utterances", pmqsService.getUtterancesByDate(selectedDate, actualHideSpeaker));
+            model.addAttribute("sessionSummary", pmqsService.getSessionSummary(selectedDate, actualHideSpeaker));
         } else {
             model.addAttribute("utterances", java.util.List.of());
         }

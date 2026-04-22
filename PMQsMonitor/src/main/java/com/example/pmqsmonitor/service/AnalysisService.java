@@ -67,7 +67,6 @@ public class AnalysisService {
         try {
             log.info("Sending direct REST request to Gemini for answer: {}", answer.getExternalId());
 
-            // Using v1beta endpoint and explicit model name
             String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
 
             Map<String, Object> requestBody = Map.of(
@@ -114,5 +113,50 @@ public class AnalysisService {
         } catch (Exception e) {
             log.error("Gemini REST Analysis Error: {}", e.getMessage(), e);
         }
+    }
+
+    public String summarizeRationales(List<String> rationales) {
+        if (rationales == null || rationales.isEmpty()) {
+            return "No analysis data available to summarize.";
+        }
+
+        String combinedRationales = String.join("\n---\n", rationales);
+        String summaryPrompt = String.format("""
+                You are a senior political editor. Below is a list of AI-generated rationales analyzing individual answers from a Prime Minister's Questions (PMQs) session.
+                
+                Please provide a concise "Executive Summary" (2-3 paragraphs) of the Prime Minister's performance in this session based on these analyses. 
+                Focus on recurring themes, the overall tone (e.g., was it a defensive or confident session?), and identify if there were specific topics where the PM was particularly evasive or informative.
+                
+                RATIONALES TO SUMMARIZE:
+                %s
+                """, combinedRationales);
+
+        try {
+            Map<String, Object> requestBody = Map.of(
+                "contents", List.of(Map.of(
+                    "parts", List.of(Map.of("text", summaryPrompt))
+                ))
+            );
+
+            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
+            
+            String responseJson = webClient.post()
+                    .uri(url)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (responseJson != null) {
+                JsonNode root = objectMapper.readTree(responseJson);
+                JsonNode candidates = root.path("candidates");
+                if (!candidates.isMissingNode() && candidates.size() > 0) {
+                    return candidates.get(0).path("content").path("parts").get(0).path("text").asText();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error generating session summary: {}", e.getMessage());
+        }
+        return "Failed to generate AI session summary.";
     }
 }
