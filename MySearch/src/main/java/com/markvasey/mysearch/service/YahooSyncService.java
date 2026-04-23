@@ -7,6 +7,7 @@ import com.markvasey.mysearch.repository.SearchItemRepository;
 import jakarta.mail.*;
 import jakarta.mail.internet.MimeMultipart;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class YahooSyncService {
@@ -39,10 +41,11 @@ public class YahooSyncService {
         this.scanMetadataRepository = scanMetadataRepository;
     }
 
-    public void sync() throws Exception {
+    @Async
+    public CompletableFuture<Void> sync() throws Exception {
         if ("YOUR_YAHOO_EMAIL".equals(username)) {
             System.out.println("Yahoo credentials not configured. Skipping Yahoo sync.");
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         Properties props = new Properties();
@@ -63,6 +66,7 @@ public class YahooSyncService {
         } finally {
             store.close();
         }
+        return CompletableFuture.completedFuture(null);
     }
 
     private void syncFolderRecursive(Folder folder) throws MessagingException {

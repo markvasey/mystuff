@@ -4,7 +4,10 @@ MySearch is a Spring Boot application designed to aggregate personal data from v
 
 ## 🚀 Features
 
-- **Personal Data Aggregation:** Automatically syncs and indexes data from multiple personal accounts.
+- **Personal Data Aggregation:** Automatically syncs and indexes data from:
+  - **Yahoo Mail:** Emails via IMAP.
+  - **Local Dropbox:** Recursively scans `~/Dropbox` for documents (`.txt`, `.rtf`, `.doc`, `.docx`).
+  - **Evernote:** (Planned/Integrated as per design).
 - **Full-Text Search:** Powered by PostgreSQL's `tsvector` indexing for fast, complex queries.
 - **Google-Style Web UI:** A clean, centered search interface with ranked results and detailed snippets.
 - **MCP Server Integration:** Exposes 4 specialized tools to AI assistants:

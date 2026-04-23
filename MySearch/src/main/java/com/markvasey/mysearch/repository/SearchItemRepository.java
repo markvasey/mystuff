@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -23,6 +24,8 @@ public interface SearchItemRepository extends JpaRepository<SearchItem, UUID> {
     String getDatabaseSize();
 
     boolean existsByExternalKey(String externalKey);
+
+    Optional<SearchItem> findByExternalKey(String externalKey);
 
     List<SearchItem> findByItemDateBetweenOrderByItemDateDesc(LocalDateTime start, LocalDateTime end);
 

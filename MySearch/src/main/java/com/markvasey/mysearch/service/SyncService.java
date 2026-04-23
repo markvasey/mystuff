@@ -9,18 +9,23 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class SyncService {
 
     private final YahooSyncService yahooSyncService;
+    private final LocalDropboxSyncService localDropboxSyncService;
     private final ScanMetadataRepository scanMetadataRepository;
     private final AtomicBoolean isSyncing = new AtomicBoolean(false);
     private LocalDateTime lastSyncTime;
 
-    public SyncService(YahooSyncService yahooSyncService, ScanMetadataRepository scanMetadataRepository) {
+    public SyncService(YahooSyncService yahooSyncService, 
+                       LocalDropboxSyncService localDropboxSyncService,
+                       ScanMetadataRepository scanMetadataRepository) {
         this.yahooSyncService = yahooSyncService;
+        this.localDropboxSyncService = localDropboxSyncService;
         this.scanMetadataRepository = scanMetadataRepository;
         // Pre-load last sync time from DB if it exists
         this.scanMetadataRepository.findById("LAST_SUCCESSFUL_SYNC")
@@ -42,8 +47,14 @@ public class SyncService {
 
         try {
             isSyncing.set(true);
-            System.out.println("BACKGROUND SYNC: Starting...");
-            yahooSyncService.sync();
+            System.out.println("BACKGROUND SYNC: Starting parallel tasks...");
+            
+            // Trigger both syncs in parallel
+            CompletableFuture<Void> yahooTask = yahooSyncService.sync();
+            CompletableFuture<Void> dropboxTask = localDropboxSyncService.sync();
+            
+            // Wait for both to complete
+            CompletableFuture.allOf(yahooTask, dropboxTask).join();
             
             // Record successful sync time
             this.lastSyncTime = LocalDateTime.now();
