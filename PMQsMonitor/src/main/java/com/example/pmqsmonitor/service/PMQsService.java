@@ -2,13 +2,15 @@ package com.example.pmqsmonitor.service;
 
 import com.example.pmqsmonitor.model.AnalysisResult;
 import com.example.pmqsmonitor.model.Utterance;
+import com.example.pmqsmonitor.model.SessionSummary;
 import com.example.pmqsmonitor.repository.UtteranceRepository;
+import com.example.pmqsmonitor.repository.AnalysisResultRepository;
+import com.example.pmqsmonitor.repository.SessionSummaryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -28,13 +30,19 @@ public class PMQsService {
     private final TWFYClient twfyClient;
     private final UtteranceRepository utteranceRepository;
     private final AnalysisService analysisService;
+    private final AnalysisResultRepository analysisResultRepository;
+    private final SessionSummaryRepository sessionSummaryRepository;
 
     public PMQsService(TWFYClient twfyClient, 
                        UtteranceRepository utteranceRepository, 
-                       AnalysisService analysisService) {
+                       AnalysisService analysisService,
+                       AnalysisResultRepository analysisResultRepository,
+                       SessionSummaryRepository sessionSummaryRepository) {
         this.twfyClient = twfyClient;
         this.utteranceRepository = utteranceRepository;
         this.analysisService = analysisService;
+        this.analysisResultRepository = analysisResultRepository;
+        this.sessionSummaryRepository = sessionSummaryRepository;
     }
 
     @Transactional
@@ -47,11 +55,30 @@ public class PMQsService {
                             .thenComparing(r -> r.htime, Comparator.nullsLast(Comparator.naturalOrder())))
                     .collect(Collectors.toList());
 
-            Utterance lastQuestion = null;
+            List<TWFYClient.TWFYRow> mergedRows = new ArrayList<>();
+            TWFYClient.TWFYRow currentMerged = null;
 
             for (TWFYClient.TWFYRow row : sortedRows) {
                 if (row.body == null || row.body.trim().isEmpty()) continue;
+                
+                String currentSpeakerId = (row.speaker != null) ? row.speaker.personId : ("unknown-" + row.gid);
 
+                if (currentMerged == null) {
+                    currentMerged = row;
+                    mergedRows.add(currentMerged);
+                } else {
+                    String lastSpeakerId = (currentMerged.speaker != null) ? currentMerged.speaker.personId : ("unknown-" + currentMerged.gid);
+                    
+                    if (currentSpeakerId.equals(lastSpeakerId)) {
+                        currentMerged.body += "<br/><br/>" + row.body;
+                    } else {
+                        currentMerged = row;
+                        mergedRows.add(currentMerged);
+                    }
+                }
+            }
+
+            for (TWFYClient.TWFYRow row : mergedRows) {
                 String gid = row.gid;
                 Optional<Utterance> existing = utteranceRepository.findByExternalId(gid);
                 
@@ -65,20 +92,6 @@ public class PMQsService {
                     utterance = mapToUtterance(row);
                     utterance.setType(utterance.isStarmer() || utterance.isRepresentative() ? "answer" : "question");
                     utterance = utteranceRepository.save(utterance);
-                    log.debug("Saved new utterance: {}, Starmer: {}", gid, utterance.isStarmer());
-                }
-
-                // Trigger Analysis logic
-                if (utterance.isStarmer() || utterance.isRepresentative()) {
-                    if (lastQuestion != null && !"answer".equals(lastQuestion.getType())) {
-                        String qName = lastQuestion.getSpeakerName() != null ? lastQuestion.getSpeakerName() : "Unknown MP";
-                        //log.info("Analyzing answer to question from {}", qName);
-                        //analysisService.analyzeUtterance(lastQuestion, utterance);
-                    }
-                } else {
-                    if (utterance.getSpeakerName() != null && !utterance.getSpeakerName().contains("Speaker")) {
-                        lastQuestion = utterance;
-                    }
                 }
             }
         } catch (Exception e) {
@@ -92,8 +105,6 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : null);
-
-        // Fix: Default to Oral questions for PMQs
         u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
         if (row.speaker != null) {
@@ -115,7 +126,7 @@ public class PMQsService {
         
         if (row.parent != null) {
             u.setParentBody(row.parent.body);
-        } else if (u.getParentBody() == null) {
+        } else {
             u.setParentBody("Prime Minister: Engagements");
         }
         
@@ -143,8 +154,6 @@ public class PMQsService {
         u.setHdate(row.hdate);
         u.setHtime(row.htime);
         u.setListurl(row.listurl != null ? "https://www.theyworkforyou.com" + row.listurl : u.getListurl());
-
-        // Fix: Default to Oral questions
         u.setDebateType(row.debateType != null ? row.debateType : "Oral questions");
         
         if (row.speaker != null) {
@@ -160,15 +169,8 @@ public class PMQsService {
             }
         }
         
-        if (u.getSpeakerName() == null && row.title != null) {
-            u.setSpeakerName(row.title);
-        }
-
-        // Fix: Ensure parentBody is set
         if (row.parent != null) {
             u.setParentBody(row.parent.body);
-        } else if (u.getParentBody() == null) {
-            u.setParentBody("Prime Minister: Engagements");
         }
     }
 
@@ -190,31 +192,50 @@ public class PMQsService {
     }
 
     public SessionSummary getSessionSummary(java.time.LocalDate date, boolean hideSpeaker) {
+        return sessionSummaryRepository.findBySessionDate(date).orElse(null);
+    }
+
+    public Map<String, Long> getSentimentCounts(java.time.LocalDate date, boolean hideSpeaker) {
+        List<Utterance> utterances = getUtterancesByDate(date, hideSpeaker);
+        return utterances.stream()
+                .map(Utterance::getAnalysisResult)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.groupingBy(AnalysisResult::getSentiment, Collectors.counting()));
+    }
+
+    public Map<String, Long> getDiversionCounts(java.time.LocalDate date, boolean hideSpeaker) {
+        List<Utterance> utterances = getUtterancesByDate(date, hideSpeaker);
+        return utterances.stream()
+                .map(Utterance::getAnalysisResult)
+                .filter(java.util.Objects::nonNull)
+                .flatMap(r -> r.getDiversionTactics().stream())
+                .collect(Collectors.groupingBy(t -> t, Collectors.counting()));
+    }
+
+    private void calculateAndSaveSummary(java.time.LocalDate date, boolean hideSpeaker) {
+        log.info("Calculating final session summary for {}...", date);
         List<Utterance> utterances = getUtterancesByDate(date, hideSpeaker);
         List<AnalysisResult> results = utterances.stream()
                 .map(Utterance::getAnalysisResult)
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
 
-        if (results.isEmpty()) return null;
+        if (results.isEmpty()) return;
 
-        SessionSummary summary = new SessionSummary();
-        summary.totalAnalyzed = results.size();
-        summary.avgCompleteness = results.stream().mapToInt(AnalysisResult::getCompleteness).average().orElse(0);
-        summary.avgRelevance = results.stream().mapToInt(AnalysisResult::getRelevance).average().orElse(0);
-        summary.directAnswers = (int) results.stream().filter(AnalysisResult::isDirectAnswer).count();
+        SessionSummary summary = sessionSummaryRepository.findBySessionDate(date)
+                .orElse(new SessionSummary());
         
-        summary.sentimentCounts = results.stream()
-                .collect(Collectors.groupingBy(AnalysisResult::getSentiment, Collectors.counting()));
-
-        summary.diversionCounts = results.stream()
-                .flatMap(r -> r.getDiversionTactics().stream())
-                .collect(Collectors.groupingBy(t -> t, Collectors.counting()));
-
+        summary.setSessionDate(date);
+        summary.setTotalAnalyzed(results.size());
+        summary.setAvgCompleteness(results.stream().mapToInt(AnalysisResult::getCompleteness).average().orElse(0));
+        summary.setAvgRelevance(results.stream().mapToInt(AnalysisResult::getRelevance).average().orElse(0));
+        summary.setDirectAnswers((int) results.stream().filter(AnalysisResult::isDirectAnswer).count());
+        
         List<String> rationales = results.stream().map(AnalysisResult::getRational).collect(Collectors.toList());
-        summary.executiveSummary = analysisService.summarizeRationales(rationales);
+        summary.setExecutiveSummary(analysisService.summarizeRationales(rationales));
+        summary.setCalculatedAt(LocalDateTime.now());
 
-        return summary;
+        sessionSummaryRepository.save(summary);
     }
 
     @Transactional
@@ -228,11 +249,14 @@ public class PMQsService {
                 if (lastQuestion != null && "question".equals(lastQuestion.getType())) {
                     log.info("Triggering AI analysis for answer to question from {}", lastQuestion.getSpeakerName());
                     analysisService.analyzeUtterance(lastQuestion, utterance);
+                    
+                    try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 }
             } else if ("question".equals(utterance.getType())) {
                 lastQuestion = utterance;
             }
         }
+        calculateAndSaveSummary(date, hideSpeaker);
     }
 
     private List<Utterance> mergeConsecutiveUtterances(List<Utterance> utterances) {
@@ -240,18 +264,15 @@ public class PMQsService {
             return utterances;
         }
 
-        List<Utterance> merged = new java.util.ArrayList<>();
+        List<Utterance> merged = new ArrayList<>();
         Utterance current = null;
 
         for (Utterance u : utterances) {
             if (current == null) {
-                current = cloneUtterance(u); // Start with a fresh clone
+                current = cloneUtterance(u);
                 merged.add(current);
             } else if (u.getSpeakerId().equals(current.getSpeakerId())) {
-                // Merge logic: Combine text and keep the analysis from either if present
                 current.setText(current.getText() + "<br/><br/>" + u.getText());
-
-                // If the new one has an analysis result and current doesn't, take it
                 if (current.getAnalysisResult() == null && u.getAnalysisResult() != null) {
                     current.setAnalysisResult(u.getAnalysisResult());
                 }
@@ -284,15 +305,5 @@ public class PMQsService {
         clone.setRepresentative(u.isRepresentative());
         clone.setAnalysisResult(u.getAnalysisResult());
         return clone;
-    }
-
-    public static class SessionSummary {
-        public int totalAnalyzed;
-        public double avgCompleteness;
-        public double avgRelevance;
-        public int directAnswers;
-        public Map<String, Long> sentimentCounts;
-        public Map<String, Long> diversionCounts;
-        public String executiveSummary;
     }
 }
