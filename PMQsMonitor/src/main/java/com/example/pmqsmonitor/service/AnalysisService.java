@@ -33,6 +33,31 @@ public class AnalysisService {
                 .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
+    private String executeWithRetry(String url, Map<String, Object> requestBody) {
+        int maxAttempts = 5;
+        int delayMs = 5000;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return webClient.post()
+                        .uri(url)
+                        .bodyValue(requestBody)
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .block();
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("Gemini API attempt {} failed: {}. Retrying in {}ms...", attempt, e.getMessage(), delayMs);
+                if (attempt < maxAttempts) {
+                    try { Thread.sleep(delayMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        log.error("Gemini API failed after {} attempts. Final error: {}", maxAttempts, lastException != null ? lastException.getMessage() : "Unknown");
+        return null;
+    }
+
     public void analyzeUtterance(Utterance question, Utterance answer) {
         if (answer.getAnalysisResult() != null) {
             return;
@@ -64,26 +89,19 @@ public class AnalysisService {
                 Return ONLY the JSON object.
                 """, aName, qName, qText, aName, aText);
 
+        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
+
+        Map<String, Object> requestBody = Map.of(
+            "contents", List.of(Map.of(
+                "parts", List.of(Map.of("text", prompt))
+            )),
+            "generationConfig", Map.of(
+                "response_mime_type", "application/json"
+            )
+        );
+
         try {
-            log.info("Sending direct REST request to Gemini for answer: {}", answer.getExternalId());
-
-            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
-
-            Map<String, Object> requestBody = Map.of(
-                "contents", List.of(Map.of(
-                    "parts", List.of(Map.of("text", prompt))
-                )),
-                "generationConfig", Map.of(
-                    "response_mime_type", "application/json"
-                )
-            );
-
-            String responseJson = webClient.post()
-                    .uri(url)
-                    .bodyValue(requestBody)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
+            String responseJson = executeWithRetry(url, requestBody);
 
             if (responseJson != null) {
                 JsonNode root = objectMapper.readTree(responseJson);
@@ -98,7 +116,6 @@ public class AnalysisService {
                             result.setUtterance(answer);
                             result.setAnalyzedAt(LocalDateTime.now());
                             
-                            // Only save to DB if the utterance is not transient (has an ID)
                             if (answer.getId() != null) {
                                 analysisResultRepository.save(result);
                                 log.info("Analysis saved successfully for {}", answer.getExternalId());
@@ -111,7 +128,7 @@ public class AnalysisService {
                 }
             }
         } catch (Exception e) {
-            log.error("Gemini REST Analysis Error: {}", e.getMessage(), e);
+            log.error("Gemini Parsing Error: {}", e.getMessage(), e);
         }
     }
 
@@ -131,32 +148,27 @@ public class AnalysisService {
                 %s
                 """, combinedRationales);
 
-        try {
-            Map<String, Object> requestBody = Map.of(
-                "contents", List.of(Map.of(
-                    "parts", List.of(Map.of("text", summaryPrompt))
-                ))
-            );
+        Map<String, Object> requestBody = Map.of(
+            "contents", List.of(Map.of(
+                "parts", List.of(Map.of("text", summaryPrompt))
+            ))
+        );
 
-            String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
-            
-            String responseJson = webClient.post()
-                    .uri(url)
-                    .bodyValue(requestBody)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
+        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey);
+        
+        String responseJson = executeWithRetry(url, requestBody);
 
-            if (responseJson != null) {
+        if (responseJson != null) {
+            try {
                 JsonNode root = objectMapper.readTree(responseJson);
                 JsonNode candidates = root.path("candidates");
                 if (!candidates.isMissingNode() && candidates.size() > 0) {
                     return candidates.get(0).path("content").path("parts").get(0).path("text").asText();
                 }
+            } catch (Exception e) {
+                log.error("Summary Parsing Error: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Error generating session summary: {}", e.getMessage());
         }
-        return "Failed to generate AI session summary.";
+        return "Failed to generate AI session summary after retries.";
     }
 }
