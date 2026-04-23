@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${item.title} + ' - Details'"></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-gray-800 min-h-screen flex flex-col p-8">
+    
+    <div class="max-w-5xl mx-auto w-full">
+        <div class="mb-6 flex justify-between items-center">
+            <h1 class="text-3xl font-bold" th:text="${item.title}"></h1>
+            <a href="javascript:window.close();" class="text-blue-600 hover:underline">Close Tab</a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
+            <div>
+                <p class="text-xs font-semibold uppercase text-gray-500">Internal ID</p>
+                <p class="text-sm font-mono break-all" th:text="${item.id}"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase text-gray-500">External Key (UID)</p>
+                <p class="text-sm font-mono break-all" th:text="${item.externalKey}"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase text-gray-500">Source</p>
+                <p class="text-sm" th:text="${item.source}"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase text-gray-500">Original Date</p>
+                <p class="text-sm" th:text="${#temporals.format(item.itemDate, 'dd MMM yyyy HH:mm:ss')}"></p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase text-gray-500">Scanned At</p>
+                <p class="text-sm" th:text="${#temporals.format(item.scannedAt, 'dd MMM yyyy HH:mm:ss')}"></p>
+            </div>
+        </div>
+
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">Snippet</h2>
+            <p class="text-gray-700 italic" th:text="${item.snippet}"></p>
+        </div>
+
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">Full Content</h2>
+            <div class="bg-gray-50 p-6 rounded border border-gray-200 overflow-auto max-h-screen whitespace-pre-wrap text-sm leading-relaxed" th:text="${item.content}"></div>
+        </div>
+    </div>
+
+</body>
+</html>
