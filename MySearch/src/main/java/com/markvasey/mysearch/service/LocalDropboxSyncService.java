@@ -28,6 +28,11 @@ public class LocalDropboxSyncService {
     private final SearchItemRepository searchItemRepository;
     private final ScanMetadataRepository scanMetadataRepository;
     private final Tika tika = new Tika();
+    private String dropboxRootPath = Paths.get(System.getProperty("user.home"), "Dropbox").toString();
+
+    public void setDropboxRootPath(String path) {
+        this.dropboxRootPath = path;
+    }
 
     private static final String SOURCE_NAME = "LOCAL_DROPBOX";
     private static final String METADATA_KEY = "LOCAL_DROPBOX_LAST_SCAN";
@@ -49,8 +54,7 @@ public class LocalDropboxSyncService {
 
     @Async
     public CompletableFuture<Void> sync() throws IOException {
-        String userHome = System.getProperty("user.home");
-        Path dropboxPath = Paths.get(userHome, "Dropbox");
+        Path dropboxPath = Paths.get(dropboxRootPath);
 
         if (!Files.exists(dropboxPath)) {
             System.out.println("Local Dropbox folder not found at: " + dropboxPath + ". Skipping local sync.");
