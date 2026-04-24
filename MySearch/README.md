@@ -97,6 +97,8 @@ To use MySearch with an MCP client (like Gemini CLI), add the following to your 
 }
 ```
 
+gemini mcp add my-search java -Dspring.profiles.active=local -jar target/mysearch-0.0.1-SNAPSHOT.jar
+
 > **Note:** For MCP `stdio` transport to work reliably, the web server is currently disabled in `application-local.properties` via `spring.main.web-application-type=none`. To use the Web UI again, change this to `servlet` and rebuild.
 
 ## 🔍 Search Syntax
