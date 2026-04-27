@@ -8,6 +8,7 @@ import it.auties.whatsapp.api.QrHandler;
 import it.auties.whatsapp.api.WebHistorySetting;
 import it.auties.whatsapp.api.ErrorHandler;
 import it.auties.whatsapp.controller.ControllerSerializer;
+import it.auties.whatsapp.model.info.ChatMessageInfo;
 
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -45,55 +46,72 @@ public class WhatsAppCLI {
 
             CompletableFuture<Void> loginFuture = new CompletableFuture<>();
 
-            var api = Whatsapp.webBuilder()
-                    .serializer(serializer)
-                    .firstConnection()
+            var builder = Whatsapp.webBuilder()
+                    .serializer(serializer);
+            
+            var connectionOptions = builder.lastOptionalConnection()
+                    .orElseGet(builder::firstConnection);
+
+            var api = connectionOptions
                     .historySetting(WebHistorySetting.discard(false))
                     .errorHandler((client, location, err) -> {
                         if(err != null && err.getMessage() != null && err.getMessage().contains("protocolType")) {
-                            // DISCARD is critical here to prevent the loop
                             return ErrorHandler.Result.DISCARD;
                         }
-                        // For other errors during setup, just try to keep going
                         return ErrorHandler.Result.DISCARD;
                     })
                     .unregistered(qr -> {
                         System.out.println("\n" + "=".repeat(50));
-                        System.out.println("QR CODE RECEIVED!");
-                        System.out.println("RAW DATA: " + qr);
+                        System.out.println("NEW REGISTRATION REQUIRED! Scan this QR code:");
+                        QrHandler.toTerminal().accept(qr);
                         System.out.println("=".repeat(50));
-                        System.out.println("Rendering terminal QR...");
-                        try {
-                            QrHandler.toTerminal().accept(qr);
-                        } catch (Exception e) {
-                            System.out.println("Terminal QR Error: " + e.getMessage());
-                        }
                     })
                     .addLoggedInListener(a -> {
                         System.out.println("\n[EVENT] Successfully Logged In!");
                         loginFuture.complete(null);
                     })
+                    .addDisconnectedListener(reason -> {
+                        System.out.println("[EVENT] Disconnected: " + reason);
+                    })
                     .connect()
                     .join();
 
+            // 1. RAW NODE DEBUGGING
+            api.addNodeReceivedListener(node -> {
+                String desc = node.description();
+                if (desc.equals("ack") || desc.equals("receipt") || desc.equals("error")) {
+                    System.out.printf("[RAW NODE] Incoming: %s (id: %s, from: %s)%n", 
+                        desc, node.attributes().getString("id"), node.attributes().getString("from"));
+                }
+            });
+
+            // 2. ENHANCED STATUS LISTENER
+            api.addMessageStatusListener(info -> {
+                System.out.println("[HEARTBEAT] Status update event triggered for message " + info.id());
+                if (info instanceof ChatMessageInfo chatInfo) {
+                    System.out.printf("[STATUS] Message %s to %s: %s%n", 
+                        chatInfo.id(), chatInfo.chatJid(), chatInfo.status());
+                } else {
+                    System.out.printf("[STATUS] Message %s status updated: %s%n", 
+                        info.id(), info.getClass().getSimpleName());
+                }
+            });
+
             if (api.store().jid().isEmpty()) {
-                System.out.println("Waiting for handshake/login... (2 minute timeout)");
+                System.out.println("Waiting for handshake/login...");
                 try {
                     loginFuture.get(2, TimeUnit.MINUTES);
                 } catch (Exception e) {
-                    System.err.println("Handshake failed or timed out. Status: " + e.getMessage());
+                    System.err.println("Handshake failed or timed out.");
                 }
             }
 
-            // Even if it times out, if JID is present now, we proceed
             if (api.store().jid().isPresent()) {
                 System.out.println("Session active for: " + api.store().jid().get());
-            } else {
-                System.err.println("No active session. Application may fail to send.");
             }
 
-            System.out.println("Stabilizing connection (10s wait)...");
-            Thread.sleep(10000);
+            System.out.println("Stabilizing connection (5s wait)...");
+            Thread.sleep(5000);
 
             while (true) {
                 System.out.println("\n--- WhatsApp CLI Service ---");
@@ -123,15 +141,17 @@ public class WhatsAppCLI {
                     Jid jid = Jid.of(target.phone + "@s.whatsapp.net");
                     
                     api.sendMessage(jid, message)
-                       .thenAccept(ack -> System.out.println("Message acknowledged by server!"))
+                       .thenAccept(info -> {
+                           System.out.println(">>> Message pushed to socket. ID: " + info.id());
+                       })
                        .exceptionally(err -> {
                            System.err.println("Failed to send: " + err.getMessage());
                            return null;
                        })
                        .join();
 
-                    System.out.println("Waiting 5s for transmission...");
-                    Thread.sleep(5000);
+                    System.out.println("Waiting for delivery events...");
+                    Thread.sleep(3000);
 
                 } catch (NumberFormatException e) {
                     System.err.println("Invalid input.");
