@@ -53,9 +53,11 @@ public class WhatsAppCLI {
                     .orElseGet(builder::firstConnection);
 
             var api = connectionOptions
-                    .historySetting(WebHistorySetting.discard(false))
+                    // Use STANDARD sync instead of DISCARD to ensure initialization
+                    .historySetting(WebHistorySetting.standard(false))
                     .errorHandler((client, location, err) -> {
                         if(err != null && err.getMessage() != null && err.getMessage().contains("protocolType")) {
+                            System.err.println("[DEBUG] Suppressing protocolType sync error...");
                             return ErrorHandler.Result.DISCARD;
                         }
                         return ErrorHandler.Result.DISCARD;
@@ -76,24 +78,26 @@ public class WhatsAppCLI {
                     .connect()
                     .join();
 
-            // 1. RAW NODE DEBUGGING
+            // LOG OUTBOUND NODES
+            api.addNodeSentListener(node -> {
+                System.out.printf("[NODE SENT] %s (id: %s, to: %s)%n", 
+                    node.description(), node.attributes().getString("id"), node.attributes().getString("to"));
+            });
+
+            // LOG INBOUND NODES (Extended)
             api.addNodeReceivedListener(node -> {
                 String desc = node.description();
-                if (desc.equals("ack") || desc.equals("receipt") || desc.equals("error")) {
-                    System.out.printf("[RAW NODE] Incoming: %s (id: %s, from: %s)%n", 
-                        desc, node.attributes().getString("id"), node.attributes().getString("from"));
+                String type = node.attributes().getString("type", "none");
+                if (desc.equals("ack") || desc.equals("receipt") || desc.equals("error") || type.equals("error")) {
+                    System.out.printf("[NODE RCVD] %s type:%s (id: %s, from: %s)%n", 
+                        desc, type, node.attributes().getString("id"), node.attributes().getString("from"));
                 }
             });
 
-            // 2. ENHANCED STATUS LISTENER
             api.addMessageStatusListener(info -> {
-                System.out.println("[HEARTBEAT] Status update event triggered for message " + info.id());
                 if (info instanceof ChatMessageInfo chatInfo) {
                     System.out.printf("[STATUS] Message %s to %s: %s%n", 
                         chatInfo.id(), chatInfo.chatJid(), chatInfo.status());
-                } else {
-                    System.out.printf("[STATUS] Message %s status updated: %s%n", 
-                        info.id(), info.getClass().getSimpleName());
                 }
             });
 
@@ -106,12 +110,9 @@ public class WhatsAppCLI {
                 }
             }
 
-            if (api.store().jid().isPresent()) {
-                System.out.println("Session active for: " + api.store().jid().get());
-            }
-
-            System.out.println("Stabilizing connection (5s wait)...");
-            Thread.sleep(5000);
+            // EXTENDED stabilization wait
+            System.out.println("Stabilizing connection (30s wait for E2EE sync)...");
+            Thread.sleep(30000);
 
             while (true) {
                 System.out.println("\n--- WhatsApp CLI Service ---");
@@ -140,9 +141,10 @@ public class WhatsAppCLI {
                     System.out.println("Sending message...");
                     Jid jid = Jid.of(target.phone + "@s.whatsapp.net");
                     
-                    api.sendMessage(jid, message)
+                    // Use sendChatMessage for standard text
+                    api.sendChatMessage(jid, message)
                        .thenAccept(info -> {
-                           System.out.println(">>> Message pushed to socket. ID: " + info.id());
+                           System.out.println(">>> Request finished. ID: " + info.id());
                        })
                        .exceptionally(err -> {
                            System.err.println("Failed to send: " + err.getMessage());
@@ -150,7 +152,6 @@ public class WhatsAppCLI {
                        })
                        .join();
 
-                    System.out.println("Waiting for delivery events...");
                     Thread.sleep(3000);
 
                 } catch (NumberFormatException e) {
