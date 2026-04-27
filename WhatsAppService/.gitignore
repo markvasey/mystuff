@@ -1,0 +1,9 @@
+target/
+src/main/resources/accounts.json
+.mvn/
+mvnw
+dependency-reduced-pom.xml
+.idea/
+*.class
+*.jar
+sessions/
