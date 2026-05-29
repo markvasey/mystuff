@@ -43,10 +43,14 @@ public class SearchCriteriaController {
     public String updateCriteria(@RequestParam java.util.UUID id,
                                  @RequestParam String keywords,
                                  @RequestParam String category,
+                                 @RequestParam int radius,
+                                 @RequestParam boolean partTime,
                                  @RequestParam boolean active) {
         criteriaRepository.findById(id).ifPresent(c -> {
             c.setKeywords(keywords);
             c.setCategory(category);
+            c.setRadius(radius);
+            c.setPartTime(partTime);
             c.setActive(active);
             criteriaRepository.save(c);
         });

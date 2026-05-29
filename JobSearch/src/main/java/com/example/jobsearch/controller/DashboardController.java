@@ -75,6 +75,13 @@ public class DashboardController {
         model.addAttribute("jobs", filteredJobs);
         model.addAttribute("totalInTab", allJobsInTab.size());
         model.addAttribute("filteredCount", filteredJobs.size());
+        
+        // Total active jobs across ALL towns
+        long totalActiveAllTowns = jobListingRepository.findAll().stream()
+                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .count();
+        model.addAttribute("totalActiveAllTowns", totalActiveAllTowns);
+
         model.addAttribute("minScore", minScore);
         model.addAttribute("currentStatus", status);
         model.addAttribute("currentTown", town);

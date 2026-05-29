@@ -60,6 +60,8 @@
                 <th>Town</th>
                 <th>Keywords</th>
                 <th>Category</th>
+                <th>Radius</th>
+                <th>PT</th>
                 <th>Active</th>
                 <th>Actions</th>
             </tr>
@@ -69,9 +71,9 @@
                 <form action="/criteria/update" method="post">
                     <input type="hidden" name="id" th:value="${c.id}" />
                     <td th:text="${c.town}">Town</td>
-                    <td><input type="text" name="keywords" th:value="${c.keywords}" style="width: 200px;" /></td>
+                    <td><input type="text" name="keywords" th:value="${c.keywords}" style="width: 180px;" /></td>
                     <td>
-                        <select name="category">
+                        <select name="category" style="width: 130px;">
                             <option value="" th:selected="${c.category == null || c.category == ''}">None</option>
                             <option value="hospitality-catering-jobs" th:selected="${c.category == 'hospitality-catering-jobs'}">Hospitality</option>
                             <option value="creative-design-jobs" th:selected="${c.category == 'creative-design-jobs'}">Creative & Media</option>
@@ -81,6 +83,13 @@
                             <option value="retail-jobs" th:selected="${c.category == 'retail-jobs'}">Retail</option>
                             <option value="teaching-jobs" th:selected="${c.category == 'teaching-jobs'}">Teaching</option>
                             <option value="part-time-jobs" th:selected="${c.category == 'part-time-jobs'}">Part Time</option>
+                        </select>
+                    </td>
+                    <td><input type="number" name="radius" th:value="${c.radius}" min="1" max="50" style="width: 40px;" /></td>
+                    <td>
+                        <select name="partTime">
+                            <option value="true" th:selected="${c.partTime}">Yes</option>
+                            <option value="false" th:selected="${!c.partTime}">No</option>
                         </select>
                     </td>
                     <td>

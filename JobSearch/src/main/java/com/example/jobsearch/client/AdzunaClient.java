@@ -66,6 +66,8 @@ public class AdzunaClient implements JobSourceClient {
                 .bodyToMono(Map.class)
                 .flatMapIterable(response -> {
                     List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
+                    int count = results != null ? results.size() : 0;
+                    log.info("Adzuna returned {} results for {} in {}.", count, criteria.getKeywords(), criteria.getTown());
                     return results != null ? results : List.of();
                 })
                 .map(this::mapToJobListing);

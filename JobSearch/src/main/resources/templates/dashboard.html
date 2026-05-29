@@ -4,7 +4,8 @@
     <title>JobSearch Dashboard</title>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
-        h1 { color: #333; }
+        h1 { color: #333; margin-bottom: 5px; }
+        .total-summary { font-size: 1.1em; color: #555; margin-bottom: 20px; }
         .stats { margin-bottom: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .job-card { background: #fff; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .job-title { font-size: 1.2em; font-weight: bold; color: #007bff; text-decoration: none; }
@@ -19,6 +20,9 @@
 </head>
 <body>
     <h1>JobSearch Dashboard</h1>
+    <div class="total-summary">
+        Total Active Jobs (All Towns): <strong th:text="${totalActiveAllTowns}">0</strong>
+    </div>
     
     <div class="tabs">
         <span th:each="townName : ${activeTowns}">
