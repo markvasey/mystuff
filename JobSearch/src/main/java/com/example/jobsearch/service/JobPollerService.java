@@ -23,7 +23,7 @@ public class JobPollerService {
     private final List<JobSourceClient> jobSourceClients;
     private final RelevanceScorerService relevanceScorerService;
 
-    private static final List<String> BLACKLIST = List.of("Software", "Developer", "Engineer", "Programmer", "DevOps", "Data Scientist", "Data Analyst", "Technician", "Financial", "Technical", "Bid", "Forklift", "Global Asset Manager", "German", "Construction", "Logistics", "Defence", "Receptionist", "Warehouse");
+    private static final List<String> BLACKLIST = List.of("Software", "Developer", "Engineer", "Programmer", "DevOps", "Data Scientist", "Data Analyst", "Technician", "Financial", "Technical", "Bid", "Forklift", "Global Asset Manager", "German", "Construction", "Logistics", "Defence", "Receptionist", "Warehouse", "Export Agent");
     private static final List<String> LOCATION_BLACKLIST = List.of("Southampton", "Basingstoke", "Portsmouth", "Bournemouth", "Reading", "Andover");
 
     private final AtomicBoolean polling = new AtomicBoolean(false);
