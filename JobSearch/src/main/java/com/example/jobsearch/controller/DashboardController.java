@@ -11,7 +11,9 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,16 +39,15 @@ public class DashboardController {
     public String dashboard(@RequestParam(defaultValue = "40") int minScore, 
                             @RequestParam(defaultValue = "ACTIVE") String status,
                             @RequestParam(required = false) String town,
+                            @RequestParam(required = false) String fragment,
                             Model model) {
         
-        // Get all unique towns from active criteria for the tabs
         List<String> activeTowns = criteriaRepository.findByActiveTrue().stream()
                 .map(SearchCriteria::getTown)
                 .distinct()
                 .sorted()
                 .collect(Collectors.toList());
 
-        // Default to the first town if none specified and status is ACTIVE
         if ("ACTIVE".equals(status) && town == null && !activeTowns.isEmpty()) {
             town = activeTowns.get(0);
         }
@@ -69,31 +70,47 @@ public class DashboardController {
         filteredJobs.sort((a, b) -> {
             Integer scoreA = a.getRelevanceScore() != null ? a.getRelevanceScore() : 0;
             Integer scoreB = b.getRelevanceScore() != null ? b.getRelevanceScore() : 0;
-            return scoreB.compareTo(scoreA); // Descending
+            return scoreB.compareTo(scoreA);
         });
         
         model.addAttribute("jobs", filteredJobs);
         model.addAttribute("totalInTab", allJobsInTab.size());
         model.addAttribute("filteredCount", filteredJobs.size());
         
-        // Total active jobs across ALL towns
         long totalActiveAllTowns = jobListingRepository.findAll().stream()
                 .filter(j -> "ACTIVE".equals(j.getStatus()))
                 .count();
         model.addAttribute("totalActiveAllTowns", totalActiveAllTowns);
 
-        model.addAttribute("minScore", minScore);
+        model.addAttribute("currentMinScore", minScore);
         model.addAttribute("currentStatus", status);
         model.addAttribute("currentTown", town);
         model.addAttribute("activeTowns", activeTowns);
         model.addAttribute("criteriaCount", criteriaRepository.count());
+        model.addAttribute("isPolling", jobPollerService.isPolling());
+
+        if ("results".equals(fragment)) {
+            return "dashboard :: resultsFragment";
+        }
         return "dashboard";
+    }
+
+    @GetMapping("/api/status")
+    @ResponseBody
+    public Map<String, Object> getStatus() {
+        long totalActive = jobListingRepository.findAll().stream()
+                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .count();
+        return Map.of(
+            "totalActive", totalActive,
+            "isPolling", jobPollerService.isPolling()
+        );
     }
 
     @PostMapping("/jobs/archive")
     public String archiveJob(@RequestParam UUID id, 
                              @RequestParam(required = false) String town,
-                             @RequestParam(defaultValue = "40") int minScore) {
+                             @RequestParam(defaultValue = "40", name = "minScore") int minScore) {
         jobListingRepository.findById(id).ifPresent(job -> {
             job.setStatus("ARCHIVED");
             jobListingRepository.save(job);
@@ -104,7 +121,7 @@ public class DashboardController {
     @PostMapping("/jobs/email")
     public String emailJob(@RequestParam UUID id, 
                            @RequestParam(required = false) String town,
-                           @RequestParam(defaultValue = "40") int minScore) {
+                           @RequestParam(defaultValue = "40", name = "minScore") int minScore) {
         jobListingRepository.findById(id).ifPresent(job -> {
             emailService.sendJobNotification(job);
             job.setStatus("EMAILED");
@@ -115,8 +132,8 @@ public class DashboardController {
 
     @GetMapping("/poll")
     public String triggerPoll(@RequestParam(required = false) String town,
-                              @RequestParam(defaultValue = "40") int minScore) {
+                              @RequestParam(defaultValue = "40", name = "minScore") int minScore) {
         jobPollerService.pollJobs();
-        return "redirect:/?minScore=" + minScore + (town != null ? "&town=" + town : "");
+        return "redirect:/?minScore=" + minScore + (town != null ? "?town=" + town : "");
     }
 }

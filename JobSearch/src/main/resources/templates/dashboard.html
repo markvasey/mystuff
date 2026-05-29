@@ -5,9 +5,10 @@
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
         h1 { color: #333; margin-bottom: 5px; }
-        .total-summary { font-size: 1.1em; color: #555; margin-bottom: 20px; }
+        .total-summary { font-size: 1.1em; color: #555; margin-bottom: 10px; }
+        .top-actions { margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
         .stats { margin-bottom: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .job-card { background: #fff; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .job-card { background: #fff; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: opacity 0.4s ease-out, transform 0.4s ease-out; }
         .job-title { font-size: 1.2em; font-weight: bold; color: #007bff; text-decoration: none; }
         .job-meta { color: #666; font-size: 0.9em; margin-top: 5px; }
         .job-source { font-size: 0.8em; background: #eee; padding: 2px 6px; border-radius: 4px; }
@@ -16,76 +17,210 @@
         .tab-link.active { background: #007bff; color: white; font-weight: bold; border: 1px solid #007bff; }
         .tab-link:hover:not(.active) { background: #e9ecef; }
         .count-info { margin-left: 15px; color: #666; font-size: 0.9em; }
+        .btn { padding: 8px 15px; border-radius: 4px; text-decoration: none; font-weight: bold; border: none; cursor: pointer; display: inline-block; font-size: 0.9em; }
+        .btn-manage { background: #007bff; color: white; margin-left: 10px; }
+        .btn-poll { background: #28a745; color: white; }
+        .btn-poll:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.7; }
+        .btn-refresh { background: #17a2b8; color: white; margin-left: 10px; }
+        .btn-refresh:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.5; }
     </style>
 </head>
 <body>
     <h1>JobSearch Dashboard</h1>
     <div class="total-summary">
-        Total Active Jobs (All Towns): <strong th:text="${totalActiveAllTowns}">0</strong>
+        Total Active Jobs (All Towns): <strong id="total-active-count" th:text="${totalActiveAllTowns}">0</strong>
+    </div>
+
+    <div class="top-actions">
+        <div style="display: flex; align-items: center;">
+            <span>Active Search Criteria: <strong th:text="${criteriaCount}">0</strong></span>
+            <a href="/criteria" class="btn btn-manage">Manage Criteria</a>
+        </div>
+        <div>
+            <form th:action="@{/poll}" method="get" id="pollForm">
+                <input type="hidden" name="town" th:value="${currentTown}" />
+                <input type="hidden" name="minScore" th:value="${currentMinScore}" />
+                <button type="submit" id="main-poll-btn" class="btn btn-poll" th:disabled="${isPolling}">
+                    <span th:text="${isPolling} ? 'Polling in progress...' : 'Run Poll Now'">Run Poll Now</span>
+                </button>
+            </form>
+        </div>
     </div>
     
     <div class="tabs">
         <span th:each="townName : ${activeTowns}">
-            <a th:href="@{/(status='ACTIVE', town=${townName}, minScore=${minScore})}" 
+            <a th:href="@{/(status='ACTIVE', town=${townName}, minScore=${currentMinScore})}" 
                th:class="'tab-link' + (${currentStatus == 'ACTIVE' && currentTown == townName} ? ' active' : '')"
                th:text="'Active (' + ${townName} + ')'">Active (Town)</a>
         </span>
-        <a th:href="@{/(status='EMAILED', minScore=${minScore})}" th:class="'tab-link' + (${currentStatus == 'EMAILED'} ? ' active' : '')">Emailed to Maya</a>
-        <a th:href="@{/(status='ARCHIVED', minScore=${minScore})}" th:class="'tab-link' + (${currentStatus == 'ARCHIVED'} ? ' active' : '')">Archived</a>
+        <a th:href="@{/(status='EMAILED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'EMAILED'} ? ' active' : '')">Emailed to Maya</a>
+        <a th:href="@{/(status='ARCHIVED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'ARCHIVED'} ? ' active' : '')">Archived</a>
     </div>
 
-    <div class="stats">
-        Active Search Criteria: <span th:text="${criteriaCount}">0</span>
-        <br/>
-        <a href="/criteria">Manage Search Criteria</a> | 
-        <a th:href="@{/poll(town=${currentTown}, minScore=${minScore})}" style="color: #28a745; font-weight: bold;">Run Poll Now</a>
-        <hr/>
-        <form action="/" method="get">
-            <input type="hidden" name="status" th:value="${currentStatus}" />
-            <input type="hidden" name="town" th:value="${currentTown}" />
-            <label>Minimum Match %:</label>
-            <input type="number" name="minScore" th:value="${minScore}" min="0" max="100" style="width: 50px;" />
-            <button type="submit">Filter</button>
-            <span class="count-info" th:text="'Showing ' + ${filteredCount} + ' of ' + ${totalInTab} + ' results'">Showing x of y results</span>
-        </form>
-    </div>
-
-    <h2 th:text="${currentStatus} + (${currentTown != null && currentStatus == 'ACTIVE'} ? ' (' + ${currentTown} + ')' : '') + ' Listings'">Listings</h2>
-    
-    <div th:each="job : ${jobs}" class="job-card">
-        <div style="float:right; text-align:right;">
-            <div th:if="${job.relevanceScore != null}" 
-                 th:style="'font-size: 1.5em; font-weight: bold; color: ' + (${job.relevanceScore >= 80} ? '#28a745' : (${job.relevanceScore >= 50} ? '#ffc107' : '#dc3545'))"
-                 th:text="${job.relevanceScore} + '%'">Match %</div>
+    <div id="results-container" th:fragment="resultsFragment">
+        <div class="stats">
+            <form th:if="${currentStatus == 'ACTIVE'}" action="/" method="get" style="display: inline-block;">
+                <input type="hidden" name="status" th:value="${currentStatus}" />
+                <input type="hidden" name="town" th:value="${currentTown}" />
+                <label>Minimum Match %:</label>
+                <input type="number" name="minScore" th:value="${currentMinScore}" min="0" max="100" style="width: 50px;" />
+                <button type="submit">Filter</button>
+            </form>
             
-            <form action="/jobs/archive" method="post" style="display: inline-block; margin-top: 10px;">
-                <input type="hidden" name="id" th:value="${job.id}" />
-                <input type="hidden" name="town" th:value="${currentTown}" />
-                <input type="hidden" name="minScore" th:value="${minScore}" />
-                <button type="submit" style="font-size: 0.7em; background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Archive</button>
-            </form>
-            <form action="/jobs/email" method="post" style="display: inline-block; margin-top: 10px; margin-left: 5px;">
-                <input type="hidden" name="id" th:value="${job.id}" />
-                <input type="hidden" name="town" th:value="${currentTown}" />
-                <input type="hidden" name="minScore" th:value="${minScore}" />
-                <button type="submit" style="font-size: 0.7em; background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;"
-                        th:text="${job.status == 'EMAILED'} ? 'Re-send Email' : 'Email to Maya'">Email to Maya</button>
-            </form>
+            <span class="count-info" id="filtered-count-display"
+                  th:data-total="${totalInTab}" th:data-filtered="${filteredCount}"
+                  th:text="${currentStatus == 'ACTIVE'} ? ('Showing ' + ${filteredCount} + ' of ' + ${totalInTab} + ' results') : ('Total: ' + ${totalInTab} + ' results')">
+                Showing x of y results
+            </span>
+
+            <button id="refresh-data-btn" class="btn btn-refresh" disabled onclick="refreshResults()">
+                Refresh Results
+            </button>
         </div>
-        <a th:href="${job.url}" class="job-title" th:text="${job.title}" target="_blank">Job Title</a>
-        <div class="job-meta">
-            <span th:text="${job.company}">Company</span> - <span th:text="${job.location}">Location</span>
-            | <span class="job-source" th:text="${job.source}">Source</span>
-            | Posted: <span th:text="${#temporals.format(job.postedAt, 'dd-MM-yyyy HH:mm')}">Date</span>
+
+        <h2 th:text="${currentStatus} + (${currentTown != null && currentStatus == 'ACTIVE'} ? ' (' + ${currentTown} + ')' : '') + ' Listings'">Listings</h2>
+        
+        <div th:each="job : ${jobs}" class="job-card" th:id="'job-' + ${job.id}">
+            <div style="float:right; text-align:right;">
+                <div th:if="${job.relevanceScore != null}" 
+                     th:style="'font-size: 1.5em; font-weight: bold; color: ' + (${job.relevanceScore >= 80} ? '#28a745' : (${job.relevanceScore >= 50} ? '#ffc107' : '#dc3545'))"
+                     th:text="${job.relevanceScore} + '%'">Match %</div>
+                
+                <div style="margin-top: 10px;">
+                    <button class="btn-action" data-action="archive" th:data-id="${job.id}" onclick="handleAction(this)"
+                            style="font-size: 0.7em; background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Archive</button>
+                    
+                    <button class="btn-action" data-action="email" th:data-id="${job.id}" onclick="handleAction(this)"
+                            style="font-size: 0.7em; background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 5px;"
+                            th:text="${job.status == 'EMAILED'} ? 'Re-send Email' : 'Email to Maya'">Email to Maya</button>
+                </div>
+            </div>
+            <a th:href="${job.url}" class="job-title" th:text="${job.title}" target="_blank">Job Title</a>
+            <div class="job-meta">
+                <span th:text="${job.company}">Company</span> - <span th:text="${job.location}">Location</span>
+                | <span class="job-source" th:text="${job.source}">Source</span>
+                | Posted: <span th:text="${#temporals.format(job.postedAt, 'dd-MM-yyyy HH:mm')}">Date</span>
+            </div>
+            <div th:text="${#strings.abbreviate(job.description, 200)}" style="margin-top:10px;">Description...</div>
+            <div th:if="${job.matchReason != null}" style="margin-top:10px; font-style: italic; color: #555; font-size: 0.85em;">
+                <strong>AI Insight:</strong> <span th:text="${job.matchReason}">Reason...</span>
+            </div>
         </div>
-        <div th:text="${#strings.abbreviate(job.description, 200)}" style="margin-top:10px;">Description...</div>
-        <div th:if="${job.matchReason != null}" style="margin-top:10px; font-style: italic; color: #555; font-size: 0.85em;">
-            <strong>AI Insight:</strong> <span th:text="${job.matchReason}">Reason...</span>
+        
+        <div th:if="${#lists.isEmpty(jobs)}">
+            No jobs found in this category.
         </div>
     </div>
-    
-    <div th:if="${#lists.isEmpty(jobs)}">
-        No jobs found in this category.
-    </div>
+
+    <script th:inline="javascript">
+        let lastKnownTotal = [[${totalActiveAllTowns}]];
+        const currentTown = [[${currentTown}]];
+        const currentStatus = [[${currentStatus}]];
+        const currentMinScore = [[${currentMinScore}]];
+
+        function checkStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('total-active-count').innerText = data.totalActive;
+                    
+                    const pollBtn = document.getElementById('main-poll-btn');
+                    if (data.isPolling) {
+                        pollBtn.disabled = true;
+                        pollBtn.querySelector('span').innerText = 'Polling in progress...';
+                    } else {
+                        pollBtn.disabled = false;
+                        pollBtn.querySelector('span').innerText = 'Run Poll Now';
+                    }
+
+                    const refreshBtn = document.getElementById('refresh-data-btn');
+                    if (data.isPolling && data.totalActive !== lastKnownTotal) {
+                        refreshBtn.disabled = false;
+                        refreshBtn.innerText = 'Refresh (' + (data.totalActive - lastKnownTotal) + ' new)';
+                    } else if (!data.isPolling) {
+                        refreshBtn.disabled = true;
+                        refreshBtn.innerText = 'Refresh Results';
+                    }
+                });
+        }
+
+        function handleAction(btn) {
+            const action = btn.getAttribute('data-action');
+            const jobId = btn.getAttribute('data-id');
+            
+            const formData = new FormData();
+            formData.append('id', jobId);
+            formData.append('minScore', currentMinScore);
+            if (currentTown) formData.append('town', currentTown);
+
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = '...';
+
+            fetch('/jobs/' + action, {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    const card = document.getElementById('job-' + jobId);
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(20px)';
+                    setTimeout(() => {
+                        card.remove();
+                        updateCountsLocally();
+                    }, 400);
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                    alert('Action failed. Please try again.');
+                }
+            });
+        }
+
+        function updateCountsLocally() {
+            const display = document.getElementById('filtered-count-display');
+            if (!display) return;
+            
+            let total = parseInt(display.getAttribute('data-total'));
+            let filtered = parseInt(display.getAttribute('data-filtered'));
+            
+            total--;
+            filtered--;
+            
+            display.setAttribute('data-total', total);
+            display.setAttribute('data-filtered', filtered);
+            
+            if (currentStatus === 'ACTIVE') {
+                display.innerText = `Showing ${filtered} of ${total} results`;
+            } else {
+                display.innerText = `Total: ${total} results`;
+            }
+
+            // Also update the global header count
+            const globalCount = document.getElementById('total-active-count');
+            globalCount.innerText = Math.max(0, parseInt(globalCount.innerText) - 1);
+        }
+
+        function refreshResults() {
+            const url = `/?status=${currentStatus}&minScore=${currentMinScore}${currentTown ? '&town=' + currentTown : ''}&fragment=results`;
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('results-container').innerHTML = html;
+                    lastKnownTotal = parseInt(document.getElementById('total-active-count').innerText);
+                    const refreshBtn = document.getElementById('refresh-data-btn');
+                    refreshBtn.disabled = true;
+                    refreshBtn.innerText = 'Refresh Results';
+                });
+        }
+
+        setInterval(checkStatus, 5000);
+
+        document.getElementById('pollForm').addEventListener('submit', function() {
+            const btn = document.getElementById('main-poll-btn');
+            btn.disabled = true;
+            btn.querySelector('span').innerText = 'Polling in progress...';
+        });
+    </script>
 </body>
 </html>
