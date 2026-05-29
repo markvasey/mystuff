@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>JobSearch Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
+        h1 { color: #333; }
+        .stats { margin-bottom: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .job-card { background: #fff; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .job-title { font-size: 1.2em; font-weight: bold; color: #007bff; text-decoration: none; }
+        .job-meta { color: #666; font-size: 0.9em; margin-top: 5px; }
+        .job-source { font-size: 0.8em; background: #eee; padding: 2px 6px; border-radius: 4px; }
+        .tabs { margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+        .tab-link { display: inline-block; padding: 10px 20px; text-decoration: none; color: #333; border-radius: 8px 8px 0 0; border: 1px solid transparent; }
+        .tab-link.active { background: #007bff; color: white; font-weight: bold; border: 1px solid #007bff; }
+        .tab-link:hover:not(.active) { background: #e9ecef; }
+        .count-info { margin-left: 15px; color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>JobSearch Dashboard</h1>
+    
+    <div class="tabs">
+        <span th:each="townName : ${activeTowns}">
+            <a th:href="@{/(status='ACTIVE', town=${townName}, minScore=${minScore})}" 
+               th:class="'tab-link' + (${currentStatus == 'ACTIVE' && currentTown == townName} ? ' active' : '')"
+               th:text="'Active (' + ${townName} + ')'">Active (Town)</a>
+        </span>
+        <a th:href="@{/(status='EMAILED', minScore=${minScore})}" th:class="'tab-link' + (${currentStatus == 'EMAILED'} ? ' active' : '')">Emailed to Maya</a>
+        <a th:href="@{/(status='ARCHIVED', minScore=${minScore})}" th:class="'tab-link' + (${currentStatus == 'ARCHIVED'} ? ' active' : '')">Archived</a>
+    </div>
+
+    <div class="stats">
+        Active Search Criteria: <span th:text="${criteriaCount}">0</span>
+        <br/>
+        <a href="/criteria">Manage Search Criteria</a> | 
+        <a th:href="@{/poll(town=${currentTown}, minScore=${minScore})}" style="color: #28a745; font-weight: bold;">Run Poll Now</a>
+        <hr/>
+        <form action="/" method="get">
+            <input type="hidden" name="status" th:value="${currentStatus}" />
+            <input type="hidden" name="town" th:value="${currentTown}" />
+            <label>Minimum Match %:</label>
+            <input type="number" name="minScore" th:value="${minScore}" min="0" max="100" style="width: 50px;" />
+            <button type="submit">Filter</button>
+            <span class="count-info" th:text="'Showing ' + ${filteredCount} + ' of ' + ${totalInTab} + ' results'">Showing x of y results</span>
+        </form>
+    </div>
+
+    <h2 th:text="${currentStatus} + (${currentTown != null && currentStatus == 'ACTIVE'} ? ' (' + ${currentTown} + ')' : '') + ' Listings'">Listings</h2>
+    
+    <div th:each="job : ${jobs}" class="job-card">
+        <div style="float:right; text-align:right;">
+            <div th:if="${job.relevanceScore != null}" 
+                 th:style="'font-size: 1.5em; font-weight: bold; color: ' + (${job.relevanceScore >= 80} ? '#28a745' : (${job.relevanceScore >= 50} ? '#ffc107' : '#dc3545'))"
+                 th:text="${job.relevanceScore} + '%'">Match %</div>
+            
+            <form action="/jobs/archive" method="post" style="display: inline-block; margin-top: 10px;">
+                <input type="hidden" name="id" th:value="${job.id}" />
+                <input type="hidden" name="town" th:value="${currentTown}" />
+                <input type="hidden" name="minScore" th:value="${minScore}" />
+                <button type="submit" style="font-size: 0.7em; background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Archive</button>
+            </form>
+            <form action="/jobs/email" method="post" style="display: inline-block; margin-top: 10px; margin-left: 5px;">
+                <input type="hidden" name="id" th:value="${job.id}" />
+                <input type="hidden" name="town" th:value="${currentTown}" />
+                <input type="hidden" name="minScore" th:value="${minScore}" />
+                <button type="submit" style="font-size: 0.7em; background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;"
+                        th:text="${job.status == 'EMAILED'} ? 'Re-send Email' : 'Email to Maya'">Email to Maya</button>
+            </form>
+        </div>
+        <a th:href="${job.url}" class="job-title" th:text="${job.title}" target="_blank">Job Title</a>
+        <div class="job-meta">
+            <span th:text="${job.company}">Company</span> - <span th:text="${job.location}">Location</span>
+            | <span class="job-source" th:text="${job.source}">Source</span>
+            | Posted: <span th:text="${#temporals.format(job.postedAt, 'dd-MM-yyyy HH:mm')}">Date</span>
+        </div>
+        <div th:text="${#strings.abbreviate(job.description, 200)}" style="margin-top:10px;">Description...</div>
+        <div th:if="${job.matchReason != null}" style="margin-top:10px; font-style: italic; color: #555; font-size: 0.85em;">
+            <strong>AI Insight:</strong> <span th:text="${job.matchReason}">Reason...</span>
+        </div>
+    </div>
+    
+    <div th:if="${#lists.isEmpty(jobs)}">
+        No jobs found in this category.
+    </div>
+</body>
+</html>

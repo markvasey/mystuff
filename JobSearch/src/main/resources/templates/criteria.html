@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Manage Search Criteria</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input { padding: 8px; width: 300px; }
+        button { padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <h1>Manage Search Criteria</h1>
+    <a href="/">Back to Dashboard</a>
+
+    <h3>Add New Criteria</h3>
+    <form action="/criteria/add" method="post">
+        <div class="form-group">
+            <label>Town:</label>
+            <input type="text" name="town" required placeholder="e.g. London" />
+        </div>
+        <div class="form-group">
+            <label>Keywords:</label>
+            <input type="text" name="keywords" required placeholder="e.g. Java Engineer" />
+        </div>
+        <div class="form-group">
+            <label>Category:</label>
+            <select name="category" style="padding: 8px; width: 320px;">
+                <option value="">-- Optional Category --</option>
+                <option value="hospitality-catering-jobs">Hospitality & Catering</option>
+                <option value="creative-design-jobs">Creative, Media & Film</option>
+                <option value="pr-advertising-marketing-jobs">PR & Marketing (Copywriting)</option>
+                <option value="charity-voluntary-jobs">Charity & Museum</option>
+                <option value="admin-jobs">Admin</option>
+                <option value="retail-jobs">Retail (Bookshops)</option>
+                <option value="teaching-jobs">Teaching</option>
+                <option value="charity-voluntary-jobs">Charity & Voluntary</option>
+                <option value="customer-services-jobs">Customer Services</option>
+                <option value="part-time-jobs">Part Time (General)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" name="partTime" checked /> Part-Time Only</label>
+        </div>
+        <div class="form-group">
+            <label>Radius (miles):</label>
+            <input type="number" name="radius" value="5" min="1" max="50" style="width: 80px;" />
+        </div>
+        <button type="submit">Add Criteria</button>
+    </form>
+
+    <h3>Existing Criteria</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Town</th>
+                <th>Keywords</th>
+                <th>Category</th>
+                <th>Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="c : ${criteriaList}">
+                <form action="/criteria/update" method="post">
+                    <input type="hidden" name="id" th:value="${c.id}" />
+                    <td th:text="${c.town}">Town</td>
+                    <td><input type="text" name="keywords" th:value="${c.keywords}" style="width: 200px;" /></td>
+                    <td>
+                        <select name="category">
+                            <option value="" th:selected="${c.category == null || c.category == ''}">None</option>
+                            <option value="hospitality-catering-jobs" th:selected="${c.category == 'hospitality-catering-jobs'}">Hospitality</option>
+                            <option value="creative-design-jobs" th:selected="${c.category == 'creative-design-jobs'}">Creative & Media</option>
+                            <option value="pr-advertising-marketing-jobs" th:selected="${c.category == 'pr-advertising-marketing-jobs'}">PR & Marketing</option>
+                            <option value="charity-voluntary-jobs" th:selected="${c.category == 'charity-voluntary-jobs'}">Charity & Museum</option>
+                            <option value="admin-jobs" th:selected="${c.category == 'admin-jobs'}">Admin</option>
+                            <option value="retail-jobs" th:selected="${c.category == 'retail-jobs'}">Retail</option>
+                            <option value="teaching-jobs" th:selected="${c.category == 'teaching-jobs'}">Teaching</option>
+                            <option value="part-time-jobs" th:selected="${c.category == 'part-time-jobs'}">Part Time</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="active">
+                            <option value="true" th:selected="${c.active}">Yes</option>
+                            <option value="false" th:selected="${!c.active}">No</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button type="submit" style="background: #007bff;">Save</button>
+                    </td>
+                </form>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

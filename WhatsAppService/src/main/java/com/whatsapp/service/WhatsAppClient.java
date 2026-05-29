@@ -34,64 +34,54 @@ public class WhatsAppClient {
         var optional = builder.newOptionalConnection(sessionName);
         
         if (optional.isPresent()) {
-            System.out.println("[Client] Existing session found. Resuming...");
+            System.out.println("[Client] Resuming session: " + sessionName);
             return optional.get();
         } else {
-            System.out.println("[Client] No session found. Starting new connection...");
+            System.out.println("[Client] Initializing new session...");
             return builder.firstConnection();
         }
     }
 
     public void start(WebOptionsBuilder options, String phone) {
-        System.out.println("[Client] Initializing connection for " + phone + "...");
-        
-        // We will use the QR code as the primary method because it's more reliable,
-        // but we'll also print any pairing codes we receive.
         this.apiFuture = options
                 .historySetting(WebHistorySetting.discard(true))
                 .errorHandler(createErrorHandler())
                 .unregistered(qr -> {
-                    System.out.println("\n[Client] QR CODE RECEIVED! Scan this with WhatsApp:");
+                    System.out.println("\n[Client] QR CODE REQUIRED. Please scan:");
                     QrHandler.toTerminal().accept(qr);
-                    System.out.println("[Client] Alternatively, if you see an 8-character code below, you can use that.");
                 })
                 .addLoggedInListener(a -> {
-                    System.out.println("[Client] Login event detected!");
+                    System.out.println("[Client] Session authenticated.");
                     loginFuture.complete(null);
                 })
                 .connect();
     }
 
     public void awaitHandshake(long timeout, TimeUnit unit) throws Exception {
-        if (apiFuture == null) throw new IllegalStateException("Connection not started");
+        if (apiFuture == null) throw new IllegalStateException("Not started");
         try {
-            System.out.println("[Client] Waiting for handshake (Linking)...");
             this.api = apiFuture.get(timeout, unit);
-            System.out.println("[Client] Handshake successful.");
+            System.out.println("[Client] Handshake finished.");
         } catch (TimeoutException e) {
-            System.err.println("[Client] ERROR: Handshake timed out. Did you scan the QR code?");
+            System.err.println("[Client] Handshake timeout.");
             throw e;
         }
     }
 
     public void awaitLogin(long timeout, TimeUnit unit) throws Exception {
-        if (api == null) throw new IllegalStateException("Handshake not complete");
+        if (api == null) throw new IllegalStateException("No api instance");
         if (api.store().jid().isEmpty()) {
-            System.out.println("[Client] Waiting for final login confirmation...");
+            System.out.println("[Client] Waiting for final login event...");
             loginFuture.get(timeout, unit);
-        } else {
-            System.out.println("[Client] Logged in as: " + api.store().jid().get());
         }
     }
 
     private ErrorHandler createErrorHandler() {
         return (client, location, err) -> {
             if (err != null && err.getMessage() != null && err.getMessage().contains("protocolType")) {
-                // Silently drop the known sync error
                 return ErrorHandler.Result.DISCARD;
             }
-            // For first connection errors, sometimes DISCARD is safer to avoid loops
-            return ErrorHandler.Result.DISCARD;
+            return ErrorHandler.Result.DISCARD; // Keep lean
         };
     }
 
@@ -99,6 +89,10 @@ public class WhatsAppClient {
         if (api == null || !api.isConnected()) {
             return CompletableFuture.failedFuture(new IllegalStateException("Not connected"));
         }
+        
+        // Wake up session - observed as helpful in unit tests
+        api.changePresence(true);
+        
         return api.sendMessage(Jid.of(phone + "@s.whatsapp.net"), text);
     }
 
@@ -107,9 +101,5 @@ public class WhatsAppClient {
             System.out.println("[Client] Disconnecting...");
             api.disconnect().join();
         }
-    }
-
-    public boolean isReady() {
-        return api != null && api.isConnected() && api.store().jid().isPresent();
     }
 }
