@@ -90,11 +90,12 @@
                 </button>
             </div>
 
-            <!-- Bulk Archive Button moved to the right -->
-            <button th:if="${currentStatus == 'ACTIVE' && filteredCount > 0}" 
+            <!-- Bulk Archive Button -->
+            <button th:if="${(currentStatus == 'ACTIVE' || currentStatus == 'POSSIBLE') && filteredCount > 0}" 
                     class="btn btn-archive-filtered" 
                     th:data-town="${currentTown}"
                     th:data-min-score="${currentMinScore}"
+                    th:data-status="${currentStatus}"
                     th:data-count="${filteredCount}"
                     onclick="archiveAllFiltered(this)">
                 <span th:text="'Archive ' + ${filteredCount}">Archive X</span>
@@ -209,12 +210,14 @@
             const town = btn.getAttribute('data-town');
             const minScore = btn.getAttribute('data-min-score');
             const count = btn.getAttribute('data-count');
+            const status = btn.getAttribute('data-status');
 
-            if (!confirm(`Archive all ${count} visible jobs?`)) return;
+            if (!confirm(`Archive all ${count} visible jobs from this tab?`)) return;
 
             const formData = new FormData();
             formData.append('town', town);
             formData.append('minScore', minScore);
+            formData.append('status', status);
 
             fetch('/jobs/archive-filtered', {
                 method: 'POST',

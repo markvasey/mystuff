@@ -126,11 +126,17 @@ public class DashboardController {
     @PostMapping("/jobs/archive-filtered")
     @ResponseBody
     public Map<String, Object> archiveFiltered(@RequestParam String town, 
-                                              @RequestParam int minScore) {
+                                              @RequestParam int minScore,
+                                              @RequestParam(defaultValue = "ACTIVE") String status) {
         List<JobListing> jobsToArchive = jobListingRepository.findAll().stream()
-                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .filter(j -> status.equals(j.getStatus()))
                 .filter(j -> town.equalsIgnoreCase(j.getTown()))
-                .filter(j -> j.getRelevanceScore() == null || j.getRelevanceScore() >= minScore)
+                .filter(j -> {
+                    if ("ACTIVE".equals(status)) {
+                        return j.getRelevanceScore() == null || j.getRelevanceScore() >= minScore;
+                    }
+                    return true;
+                })
                 .collect(Collectors.toList());
         
         int count = jobsToArchive.size();
