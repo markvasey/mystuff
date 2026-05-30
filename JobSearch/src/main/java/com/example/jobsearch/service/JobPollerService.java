@@ -7,6 +7,7 @@ import com.example.jobsearch.repository.JobListingRepository;
 import com.example.jobsearch.repository.SearchCriteriaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -22,6 +23,9 @@ public class JobPollerService {
     private final JobListingRepository jobListingRepository;
     private final List<JobSourceClient> jobSourceClients;
     private final RelevanceScorerService relevanceScorerService;
+
+    @Value("${app.polling.cron}")
+    private String cronExpression;
 
     private static final List<String> BLACKLIST = List.of("Software", "Developer", "Engineer", "Programmer", "DevOps", "Data Scientist", "Data Analyst", "Technician", "Financial", "Technical", "Bid", "Forklift", "Global Asset Manager", "German", "Construction", "Logistics", "Defence", "Receptionist", "Warehouse", "Export Agent");
     private static final List<String> LOCATION_BLACKLIST = List.of("Southampton", "Basingstoke", "Portsmouth", "Bournemouth", "Reading", "Andover");
@@ -41,6 +45,11 @@ public class JobPollerService {
 
     @Scheduled(cron = "${app.polling.cron}")
     public void pollJobs() {
+        // Handle disabled polling via config
+        if ("-".equals(cronExpression)) {
+            return;
+        }
+        
         if (!polling.compareAndSet(false, true)) {
             log.info("Poll already in progress, skipping.");
             return;
