@@ -44,31 +44,36 @@ public class JobPollerService {
     }
 
     @Scheduled(cron = "${app.polling.cron}")
-    public void pollJobs() {
-        // Handle disabled polling via config
+    public void scheduledPoll() {
         if ("-".equals(cronExpression)) {
             return;
         }
-        
+        pollJobs();
+    }
+
+    public void pollJobs() {
         if (!polling.compareAndSet(false, true)) {
             log.info("Poll already in progress, skipping.");
             return;
         }
-        try {
-            log.info("Starting job poll...");
-            List<SearchCriteria> activeCriteria = criteriaRepository.findByActiveTrue();
-            
-            for (SearchCriteria criteria : activeCriteria) {
-                processCriteria(criteria);
-                criteria.setLastPolledAt(LocalDateTime.now());
-                criteriaRepository.save(criteria);
+        // Run in a new thread to avoid blocking the controller redirect
+        new Thread(() -> {
+            try {
+                log.info("Starting job poll...");
+                List<SearchCriteria> activeCriteria = criteriaRepository.findByActiveTrue();
+                
+                for (SearchCriteria criteria : activeCriteria) {
+                    processCriteria(criteria);
+                    criteria.setLastPolledAt(LocalDateTime.now());
+                    criteriaRepository.save(criteria);
+                }
+                log.info("Job poll complete.");
+            } catch (Exception e) {
+                log.error("Error during job poll: {}", e.getMessage());
+            } finally {
+                polling.set(false);
             }
-            log.info("Job poll complete.");
-        } catch (Exception e) {
-            log.error("Error during job poll: {}", e.getMessage());
-        } finally {
-            polling.set(false);
-        }
+        }).start();
     }
 
     private void processCriteria(SearchCriteria criteria) {

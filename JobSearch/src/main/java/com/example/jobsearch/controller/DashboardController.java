@@ -162,6 +162,6 @@ public class DashboardController {
     public String triggerPoll(@RequestParam(required = false) String town,
                               @RequestParam(defaultValue = "40", name = "minScore") int minScore) {
         jobPollerService.pollJobs();
-        return "redirect:/?minScore=" + minScore + (town != null ? "?town=" + town : "");
+        return "redirect:/?minScore=" + minScore + (town != null ? "&town=" + town : "");
     }
 }
