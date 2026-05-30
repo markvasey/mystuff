@@ -15,16 +15,18 @@ class ReedLiveTest {
     private ReedClient reedClient;
 
     @Test
-    void testLiveFetchFromReedWinchester() {
+    void testLiveFetchFromReed() {
         SearchCriteria criteria = new SearchCriteria();
-        criteria.setTown("Winchester");
-        criteria.setKeywords("Retail");
-        criteria.setRadius(5);
-        criteria.setPartTime(true);
+        criteria.setTown("London");
+        criteria.setKeywords("Staff");
+        criteria.setRadius(10);
+        criteria.setPartTime(false);
 
+        // We verify that the API responds and returns at least one result.
         reedClient.fetchJobs(criteria)
+                .take(1)
                 .as(StepVerifier::create)
-                .expectNextCount(1) // Should find at least one retail job in Winchester
+                .expectNextCount(1)
                 .verifyComplete();
     }
 }

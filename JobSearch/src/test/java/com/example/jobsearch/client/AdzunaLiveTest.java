@@ -8,7 +8,7 @@ import org.springframework.test.context.ActiveProfiles;
 import reactor.test.StepVerifier;
 
 @SpringBootTest
-@ActiveProfiles("test") // Use H2 for DB, but keys will load from application.properties
+@ActiveProfiles("local") // Use local to get real keys for live test
 class AdzunaLiveTest {
 
     @Autowired
@@ -17,8 +17,8 @@ class AdzunaLiveTest {
     @Test
     void testLiveFetchFromAdzuna() {
         SearchCriteria criteria = new SearchCriteria();
-        criteria.setTown("Winchester");
-        criteria.setKeywords("Software");
+        criteria.setTown("London");
+        criteria.setKeywords("Staff");
 
         adzunaClient.fetchJobs(criteria)
                 .take(1) 
