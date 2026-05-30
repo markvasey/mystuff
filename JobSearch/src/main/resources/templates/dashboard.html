@@ -24,6 +24,7 @@
         .btn-poll:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.7; }
         .btn-refresh { background: #17a2b8; color: white; margin-left: 10px; }
         .btn-refresh:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.5; }
+        .btn-archive-filtered { background: #dc3545; color: white; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -68,23 +69,35 @@
     </div>
 
     <div id="results-container" th:fragment="resultsFragment">
-        <div class="stats">
-            <form th:if="${currentStatus == 'ACTIVE'}" action="/" method="get" style="display: inline-block;">
-                <input type="hidden" name="status" th:value="${currentStatus}" />
-                <input type="hidden" name="town" th:value="${currentTown}" />
-                <label>Minimum Match %:</label>
-                <input type="number" name="minScore" th:value="${currentMinScore}" min="0" max="100" style="width: 50px;" />
-                <button type="submit">Filter</button>
-            </form>
-            
-            <span class="count-info" id="filtered-count-display"
-                  th:data-total="${totalInTab}" th:data-filtered="${filteredCount}"
-                  th:text="${currentStatus == 'ACTIVE'} ? ('Showing ' + ${filteredCount} + ' of ' + ${totalInTab} + ' results') : ('Total: ' + ${totalInTab} + ' results')">
-                Showing x of y results
-            </span>
+        <div class="stats" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <form th:if="${currentStatus == 'ACTIVE'}" action="/" method="get" style="display: inline-block;">
+                    <input type="hidden" name="status" th:value="${currentStatus}" />
+                    <input type="hidden" name="town" th:value="${currentTown}" />
+                    <label>Minimum Match %:</label>
+                    <input type="number" name="minScore" th:value="${currentMinScore}" min="0" max="100" style="width: 50px;" />
+                    <button type="submit">Filter</button>
+                </form>
+                
+                <span class="count-info" id="filtered-count-display"
+                      th:data-total="${totalInTab}" th:data-filtered="${filteredCount}"
+                      th:text="${currentStatus == 'ACTIVE'} ? ('Showing ' + ${filteredCount} + ' of ' + ${totalInTab} + ' results') : ('Total: ' + ${totalInTab} + ' results')">
+                    Showing x of y results
+                </span>
 
-            <button id="refresh-data-btn" class="btn btn-refresh" disabled onclick="refreshResults()">
-                Refresh Results
+                <button id="refresh-data-btn" class="btn btn-refresh" disabled onclick="refreshResults()">
+                    Refresh Results
+                </button>
+            </div>
+
+            <!-- Bulk Archive Button moved to the right -->
+            <button th:if="${currentStatus == 'ACTIVE' && filteredCount > 0}" 
+                    class="btn btn-archive-filtered" 
+                    th:data-town="${currentTown}"
+                    th:data-min-score="${currentMinScore}"
+                    th:data-count="${filteredCount}"
+                    onclick="archiveAllFiltered(this)">
+                <span th:text="'Archive ' + ${filteredCount}">Archive X</span>
             </button>
         </div>
 
@@ -176,12 +189,14 @@
             }).then(response => {
                 if (response.ok) {
                     const card = document.getElementById('job-' + jobId);
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateX(20px)';
-                    setTimeout(() => {
-                        card.remove();
-                        updateCountsLocally();
-                    }, 400);
+                    if (card) {
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(20px)';
+                        setTimeout(() => {
+                            card.remove();
+                            updateCountsLocally(1);
+                        }, 400);
+                    }
                 } else {
                     btn.disabled = false;
                     btn.innerText = originalText;
@@ -190,15 +205,45 @@
             });
         }
 
-        function updateCountsLocally() {
+        function archiveAllFiltered(btn) {
+            const town = btn.getAttribute('data-town');
+            const minScore = btn.getAttribute('data-min-score');
+            const count = btn.getAttribute('data-count');
+
+            if (!confirm(`Archive all ${count} visible jobs?`)) return;
+
+            const formData = new FormData();
+            formData.append('town', town);
+            formData.append('minScore', minScore);
+
+            fetch('/jobs/archive-filtered', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    const cards = document.querySelectorAll('.job-card');
+                    cards.forEach(card => {
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateY(20px)';
+                    });
+                    setTimeout(() => {
+                        location.reload(); 
+                    }, 500);
+                } else {
+                    alert('Bulk archive failed.');
+                }
+            });
+        }
+
+        function updateCountsLocally(amount) {
             const display = document.getElementById('filtered-count-display');
             if (!display) return;
             
             let total = parseInt(display.getAttribute('data-total'));
             let filtered = parseInt(display.getAttribute('data-filtered'));
             
-            total--;
-            filtered--;
+            total -= amount;
+            filtered -= amount;
             
             display.setAttribute('data-total', total);
             display.setAttribute('data-filtered', filtered);
@@ -209,9 +254,8 @@
                 display.innerText = `Total: ${total} results`;
             }
 
-            // Also update the global header count
             const globalCount = document.getElementById('total-active-count');
-            globalCount.innerText = Math.max(0, parseInt(globalCount.innerText) - 1);
+            globalCount.innerText = Math.max(0, parseInt(globalCount.innerText) - amount);
         }
 
         function refreshResults() {

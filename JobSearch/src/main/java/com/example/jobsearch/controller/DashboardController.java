@@ -123,6 +123,23 @@ public class DashboardController {
         return "redirect:/?status=ACTIVE&minScore=" + minScore + (town != null ? "&town=" + town : "");
     }
 
+    @PostMapping("/jobs/archive-filtered")
+    @ResponseBody
+    public Map<String, Object> archiveFiltered(@RequestParam String town, 
+                                              @RequestParam int minScore) {
+        List<JobListing> jobsToArchive = jobListingRepository.findAll().stream()
+                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .filter(j -> town.equalsIgnoreCase(j.getTown()))
+                .filter(j -> j.getRelevanceScore() == null || j.getRelevanceScore() >= minScore)
+                .collect(Collectors.toList());
+        
+        int count = jobsToArchive.size();
+        jobsToArchive.forEach(j -> j.setStatus("ARCHIVED"));
+        jobListingRepository.saveAll(jobsToArchive);
+        
+        return Map.of("archivedCount", count, "success", true);
+    }
+
     @PostMapping("/jobs/email")
     public String emailJob(@RequestParam UUID id, 
                            @RequestParam(required = false) String town,
