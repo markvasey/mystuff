@@ -48,7 +48,7 @@ public class DashboardController {
                 .sorted()
                 .collect(Collectors.toList());
 
-        if ("ACTIVE".equals(status) && town == null && !activeTowns.isEmpty()) {
+        if (("ACTIVE".equals(status) || "POSSIBLE".equals(status)) && town == null && !activeTowns.isEmpty()) {
             town = activeTowns.get(0);
         }
 
@@ -56,7 +56,7 @@ public class DashboardController {
         List<JobListing> allJobsInTab = jobListingRepository.findAll().stream()
                 .filter(j -> status.equals(j.getStatus()))
                 .filter(j -> {
-                    if ("ACTIVE".equals(status) && finalTown != null) {
+                    if (("ACTIVE".equals(status) || "POSSIBLE".equals(status)) && finalTown != null) {
                         return finalTown.equalsIgnoreCase(j.getTown());
                     }
                     return true;
@@ -64,7 +64,12 @@ public class DashboardController {
                 .collect(Collectors.toList());
 
         List<JobListing> filteredJobs = allJobsInTab.stream()
-                .filter(j -> j.getRelevanceScore() == null || j.getRelevanceScore() >= minScore)
+                .filter(j -> {
+                    if ("ACTIVE".equals(status)) {
+                        return j.getRelevanceScore() == null || j.getRelevanceScore() >= minScore;
+                    }
+                    return true; // No score filter for POSSIBLE, EMAILED, ARCHIVED
+                })
                 .collect(Collectors.toList()); 
         
         filteredJobs.sort((a, b) -> {
@@ -78,7 +83,7 @@ public class DashboardController {
         model.addAttribute("filteredCount", filteredJobs.size());
         
         long totalActiveAllTowns = jobListingRepository.findAll().stream()
-                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .filter(j -> "ACTIVE".equals(j.getStatus()) || "POSSIBLE".equals(j.getStatus()))
                 .count();
         model.addAttribute("totalActiveAllTowns", totalActiveAllTowns);
 
@@ -99,7 +104,7 @@ public class DashboardController {
     @ResponseBody
     public Map<String, Object> getStatus() {
         long totalActive = jobListingRepository.findAll().stream()
-                .filter(j -> "ACTIVE".equals(j.getStatus()))
+                .filter(j -> "ACTIVE".equals(j.getStatus()) || "POSSIBLE".equals(j.getStatus()))
                 .count();
         return Map.of(
             "totalActive", totalActive,

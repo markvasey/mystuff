@@ -25,6 +25,7 @@ public class JobPollerService {
 
     private static final List<String> BLACKLIST = List.of("Software", "Developer", "Engineer", "Programmer", "DevOps", "Data Scientist", "Data Analyst", "Technician", "Financial", "Technical", "Bid", "Forklift", "Global Asset Manager", "German", "Construction", "Logistics", "Defence", "Receptionist", "Warehouse", "Export Agent");
     private static final List<String> LOCATION_BLACKLIST = List.of("Southampton", "Basingstoke", "Portsmouth", "Bournemouth", "Reading", "Andover");
+    private static final List<String> POSSIBLE_LIST = List.of("Teacher", "Teaching Assistant");
 
     private final AtomicBoolean polling = new AtomicBoolean(false);
 
@@ -75,14 +76,25 @@ public class JobPollerService {
 
                         if (jobListingRepository.findByExternalIdAndSource(job.getExternalId(), job.getSource()).isEmpty() &&
                             jobListingRepository.findByTitleAndCompanyAndTown(job.getTitle(), job.getCompany(), criteria.getTown()).isEmpty()) {
+                            
                             log.info("New job found: {} at {} ({})", job.getTitle(), job.getCompany(), job.getSource());
                             job.setTown(criteria.getTown());
-                            relevanceScorerService.scoreJob(job);
+
+                            // Check if it should be marked as POSSIBLE (skips AI scoring)
+                            boolean isPossible = POSSIBLE_LIST.stream().anyMatch(word -> job.getTitle().toLowerCase().contains(word.toLowerCase()));
                             
-                            // Auto-archive if score is 0
-                            if (job.getRelevanceScore() != null && job.getRelevanceScore() == 0) {
-                                log.info("Auto-archiving job with 0% match: {}", job.getTitle());
-                                job.setStatus("ARCHIVED");
+                            if (isPossible) {
+                                log.info("Marking job as POSSIBLE (skipping AI): {}", job.getTitle());
+                                job.setStatus("POSSIBLE");
+                            } else {
+                                // Only score if not on the POSSIBLE list
+                                relevanceScorerService.scoreJob(job);
+                                
+                                // Auto-archive if score is 0
+                                if (job.getRelevanceScore() != null && job.getRelevanceScore() == 0) {
+                                    log.info("Auto-archiving job with 0% match: {}", job.getTitle());
+                                    job.setStatus("ARCHIVED");
+                                }
                             }
                             
                             jobListingRepository.save(job);
