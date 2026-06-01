@@ -12,6 +12,10 @@ public class SearchCriteria {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
+    @ManyToOne
+    @JoinColumn(name = "person_id")
+    private Person person;
+
     @Column(nullable = false)
     private String town;
 
@@ -29,6 +33,8 @@ public class SearchCriteria {
     // Getters and Setters
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public Person getPerson() { return person; }
+    public void setPerson(Person person) { this.person = person; }
     public String getTown() { return town; }
     public void setTown(String town) { this.town = town; }
     public String getKeywords() { return keywords; }

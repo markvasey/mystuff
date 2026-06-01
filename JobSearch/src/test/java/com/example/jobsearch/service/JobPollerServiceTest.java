@@ -2,6 +2,7 @@ package com.example.jobsearch.service;
 
 import com.example.jobsearch.client.JobSourceClient;
 import com.example.jobsearch.repository.JobListingRepository;
+import com.example.jobsearch.repository.JobMatchRepository;
 import com.example.jobsearch.repository.SearchCriteriaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,9 @@ class JobPollerServiceTest {
     private JobListingRepository jobListingRepository;
 
     @Mock
+    private JobMatchRepository jobMatchRepository;
+
+    @Mock
     private RelevanceScorerService relevanceScorerService;
 
     @Mock
@@ -36,6 +40,7 @@ class JobPollerServiceTest {
         jobPollerService = new JobPollerService(
                 criteriaRepository,
                 jobListingRepository,
+                jobMatchRepository,
                 List.of(mockClient),
                 relevanceScorerService
         );
@@ -61,8 +66,8 @@ class JobPollerServiceTest {
 
         jobPollerService.pollJobs();
 
-        // Verify that the repository was called (polling proceeded)
-        verify(criteriaRepository, times(1)).findByActiveTrue();
+        // Verify that the repository was called (polling proceeded) with timeout for background thread
+        verify(criteriaRepository, timeout(1000).times(1)).findByActiveTrue();
     }
 
     @Test

@@ -1,13 +1,15 @@
 package com.example.jobsearch.service;
 
 import com.example.jobsearch.entity.JobListing;
+import com.example.jobsearch.entity.JobMatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,35 +18,36 @@ public class RelevanceScorerService {
 
     private static final Logger log = LoggerFactory.getLogger(RelevanceScorerService.class);
     private final ChatClient chatClient;
-    private String resumeContent;
-
-    @Value("${app.resume-path:MayaResume.txt}")
-    private String resumePath;
+    private final Map<String, String> resumeCache = new ConcurrentHashMap<>();
 
     public RelevanceScorerService(ChatClient.Builder chatClientBuilder) {
         this.chatClient = chatClientBuilder.build();
     }
 
-    private synchronized void loadResume() {
-        if (resumeContent == null) {
+    private String getResumeContent(String resumePath) {
+        return resumeCache.computeIfAbsent(resumePath, path -> {
             try {
-                resumeContent = Files.readString(Path.of(resumePath));
-                log.info("Loaded resume from {}", resumePath);
+                String content = Files.readString(Path.of(path));
+                log.info("Loaded resume from {}", path);
+                return content;
             } catch (Exception e) {
-                log.error("Failed to load resume: {}", e.getMessage());
-                resumeContent = "Resume not found.";
+                log.error("Failed to load resume {}: {}", path, e.getMessage());
+                return "Resume not found.";
             }
-        }
+        });
     }
 
-    public void scoreJob(JobListing job) {
-        loadResume();
+    public void scoreJob(JobMatch match) {
+        JobListing job = match.getJobListing();
+        String personName = match.getPerson().getName();
+        String resumePath = match.getPerson().getResumePath();
+        String resumeContent = getResumeContent(resumePath);
         
         String prompt = String.format("""
-            You are a career advisor for Maya Vasey. 
-            Evaluate the following job listing against her resume and provide a relevance score (0-100) and a brief reason.
+            You are a career advisor for %s. 
+            Evaluate the following job listing against their resume and provide a relevance score (0-100) and a brief reason.
             
-            MAYA'S RESUME:
+            %s'S RESUME:
             %s
             
             JOB LISTING:
@@ -56,32 +59,32 @@ public class RelevanceScorerService {
             Output format:
             SCORE: [number]
             REASON: [one sentence summary of fit]
-            """, resumeContent, job.getTitle(), job.getCompany(), job.getLocation(), job.getDescription());
+            """, personName, personName.toUpperCase(), resumeContent, job.getTitle(), job.getCompany(), job.getLocation(), job.getDescription());
 
         try {
             String response = chatClient.prompt(prompt).call().content();
             log.debug("AI Response for {}: {}", job.getTitle(), response);
             
-            parseResponse(job, response);
+            parseResponse(match, response);
         } catch (Exception e) {
             log.error("AI scoring failed for {}: {}", job.getTitle(), e.getMessage());
-            job.setRelevanceScore(0);
-            job.setMatchReason("AI analysis unavailable.");
+            match.setRelevanceScore(0);
+            match.setMatchReason("AI analysis unavailable.");
         }
     }
 
-    private void parseResponse(JobListing job, String response) {
+    private void parseResponse(JobMatch match, String response) {
         Pattern scorePattern = Pattern.compile("SCORE:\\s*(\\d+)");
         Pattern reasonPattern = Pattern.compile("REASON:\\s*(.*)", Pattern.DOTALL);
 
         Matcher scoreMatcher = scorePattern.matcher(response);
         if (scoreMatcher.find()) {
-            job.setRelevanceScore(Integer.parseInt(scoreMatcher.group(1).trim()));
+            match.setRelevanceScore(Integer.parseInt(scoreMatcher.group(1).trim()));
         }
 
         Matcher reasonMatcher = reasonPattern.matcher(response);
         if (reasonMatcher.find()) {
-            job.setMatchReason(reasonMatcher.group(1).trim());
+            match.setMatchReason(reasonMatcher.group(1).trim());
         }
     }
 }

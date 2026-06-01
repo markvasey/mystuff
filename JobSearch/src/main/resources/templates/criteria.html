@@ -6,19 +6,67 @@
         body { font-family: sans-serif; margin: 20px; background-color: #f4f7f6; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; }
-        input { padding: 8px; width: 300px; }
+        input, select { padding: 8px; width: 300px; }
         button { padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-        th { background: #f8f9fa; }
+        th { background: #f8f9fa; cursor: pointer; position: relative; }
+        th:hover { background: #e9ecef; }
+        .sort-icon { font-size: 0.8em; margin-left: 5px; }
+        .filter-row input { width: 90%; padding: 4px; font-size: 0.85em; }
+        .filter-row select { width: 95%; padding: 4px; font-size: 0.85em; }
+        .btn-delete { background: #dc3545; font-size: 0.8em; padding: 5px 10px; }
+        .btn-save { background: #007bff; font-size: 0.8em; padding: 5px 10px; }
+        .btn-save:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.6; }
+        .settings-container { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 30px; }
+        .settings-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; min-width: 300px; }
+        .settings-card h4 { margin-top: 0; color: #007bff; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .settings-card textarea { width: 100%; height: 80px; padding: 8px; box-sizing: border-box; font-family: inherit; font-size: 0.9em; margin-bottom: 10px; }
+        .save-indicator { font-size: 0.8em; color: #28a745; margin-left: 10px; opacity: 0; transition: opacity 0.5s; }
+        .save-indicator.show { opacity: 1; }
     </style>
 </head>
 <body>
     <h1>Manage Search Criteria</h1>
     <a href="/">Back to Dashboard</a>
 
+    <div class="settings-container">
+        <div th:each="p : ${people}" class="settings-card">
+            <h4 th:text="${p.name} + ' Settings'">Person Settings</h4>
+            <form action="/person/update-settings" method="post" class="settings-form">
+                <input type="hidden" name="personId" th:value="${p.id}" />
+                
+                <div class="form-group">
+                    <label>Title Blacklist (comma separated):</label>
+                    <textarea name="blacklist" th:text="${p.blacklist}" placeholder="e.g. Software, Engineer"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Location Blacklist (comma separated):</label>
+                    <textarea name="locationBlacklist" th:text="${p.locationBlacklist}" placeholder="e.g. Reading, Andover"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Possibles List (Auto-matches, comma separated):</label>
+                    <textarea name="possibleList" th:text="${p.possibleList}" placeholder="e.g. Teacher, Playworker"></textarea>
+                </div>
+                
+                <div style="display: flex; align-items: center;">
+                    <button type="submit" class="btn-save" disabled>Update [[${p.name}]] Settings</button>
+                    <span class="save-indicator">Saved!</span>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <h3>Add New Criteria</h3>
     <form action="/criteria/add" method="post">
+        <div class="form-group">
+            <label>Person:</label>
+            <select name="personId" required style="padding: 8px; width: 320px;">
+                <option th:each="person : ${people}" th:value="${person.id}" th:text="${person.name}">Person</option>
+            </select>
+        </div>
         <div class="form-group">
             <label>Town:</label>
             <input type="text" name="town" required placeholder="e.g. London" />
@@ -54,25 +102,66 @@
     </form>
 
     <h3>Existing Criteria</h3>
-    <table>
+    <table id="criteriaTable">
         <thead>
             <tr>
-                <th>Town</th>
-                <th>Keywords</th>
-                <th>Category</th>
-                <th>Radius</th>
-                <th>PT</th>
-                <th>Active</th>
+                <th onclick="sortTable(0)">Person <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(1)">Town <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(2)">Keywords <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(3)">Category <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(4)">Radius <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(5)">Part-Time <span class="sort-icon">⇅</span></th>
+                <th onclick="sortTable(6)">Active <span class="sort-icon">⇅</span></th>
                 <th>Actions</th>
+            </tr>
+            <tr class="filter-row">
+                <td>
+                    <select onchange="filterTable()">
+                        <option value="">All People</option>
+                        <option th:each="p : ${people}" th:value="${p.name}" th:text="${p.name}">Name</option>
+                    </select>
+                </td>
+                <td>
+                    <select onchange="filterTable()">
+                        <option value="">All Towns</option>
+                        <option th:each="town : ${#lists.sort(new java.util.ArrayList(new java.util.HashSet(criteriaList.![town])))}" th:value="${town}" th:text="${town}">Town</option>
+                    </select>
+                </td>
+                <td><input type="text" onkeyup="filterTable()" placeholder="Filter Keywords..." /></td>
+                <td><input type="text" onkeyup="filterTable()" placeholder="Filter Category..." /></td>
+                <td>
+                    <select onchange="filterTable()">
+                        <option value="">All</option>
+                        <option th:each="r : ${#lists.sort(new java.util.ArrayList(new java.util.HashSet(criteriaList.![radius])))}" th:value="${r}" th:text="${r}">Radius</option>
+                    </select>
+                </td>
+                <td>
+                    <select onchange="filterTable()">
+                        <option value="">All</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </td>
+                <td>
+                    <select onchange="filterTable()">
+                        <option value="">All</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </td>
+                <td></td>
             </tr>
         </thead>
         <tbody>
             <tr th:each="c : ${criteriaList}">
-                <form action="/criteria/update" method="post">
+                <form action="/criteria/update" method="post" th:id="'update-form-' + ${c.id}">
                     <input type="hidden" name="id" th:value="${c.id}" />
+                    <td th:text="${c.person != null ? c.person.name : 'Unknown'}" th:data-order="${c.person != null ? c.person.name : ''}">Person</td>
                     <td th:text="${c.town}">Town</td>
-                    <td><input type="text" name="keywords" th:value="${c.keywords}" style="width: 180px;" /></td>
-                    <td>
+                    <td th:data-order="${c.keywords}">
+                        <input type="text" name="keywords" th:value="${c.keywords}" style="width: 180px;" />
+                    </td>
+                    <td th:data-order="${c.category}">
                         <select name="category" style="width: 130px;">
                             <option value="" th:selected="${c.category == null || c.category == ''}">None</option>
                             <option value="hospitality-catering-jobs" th:selected="${c.category == 'hospitality-catering-jobs'}">Hospitality</option>
@@ -85,25 +174,163 @@
                             <option value="part-time-jobs" th:selected="${c.category == 'part-time-jobs'}">Part Time</option>
                         </select>
                     </td>
-                    <td><input type="number" name="radius" th:value="${c.radius}" min="1" max="50" style="width: 40px;" /></td>
-                    <td>
+                    <td th:data-order="${c.radius}">
+                        <input type="number" name="radius" th:value="${c.radius}" min="1" max="50" style="width: 40px;" />
+                    </td>
+                    <td th:data-order="${c.partTime ? 'Yes' : 'No'}">
                         <select name="partTime">
                             <option value="true" th:selected="${c.partTime}">Yes</option>
                             <option value="false" th:selected="${!c.partTime}">No</option>
                         </select>
                     </td>
-                    <td>
+                    <td th:data-order="${c.active ? 'Yes' : 'No'}">
                         <select name="active">
                             <option value="true" th:selected="${c.active}">Yes</option>
                             <option value="false" th:selected="${!c.active}">No</option>
                         </select>
                     </td>
-                    <td>
-                        <button type="submit" style="background: #007bff;">Save</button>
+                    <td style="white-space: nowrap;">
+                        <button type="submit" class="btn-save" disabled>Save</button>
                     </td>
                 </form>
+                <td style="border-left: none;">
+                    <form action="/criteria/delete" method="post" onsubmit="return confirm('Are you sure you want to delete this criteria?');" style="display:inline;">
+                        <input type="hidden" name="id" th:value="${c.id}" />
+                        <button type="submit" class="btn-delete">Delete</button>
+                    </form>
+                </td>
             </tr>
         </tbody>
     </table>
+
+    <script th:inline="javascript">
+        // Track changes in forms to enable/disable save buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                const button = form.querySelector('.btn-save');
+                if (!button) return;
+                if (form.action.includes('/criteria/add')) return;
+
+                // Capture initial state
+                const getValues = (f) => {
+                    const data = new FormData(f);
+                    const values = {};
+                    for (let [key, value] of data.entries()) {
+                        values[key] = value;
+                    }
+                    return JSON.stringify(values);
+                };
+
+                const initialState = getValues(form);
+
+                const handleChange = () => {
+                    button.disabled = (getValues(form) === initialState);
+                };
+
+                form.addEventListener('input', handleChange);
+                form.addEventListener('change', handleChange);
+            });
+            
+            // Check for success parameter in URL (optional but nice)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('saved')) {
+                // We could show a global toast here
+            }
+        });
+
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("criteriaTable");
+            switching = true;
+            dir = "asc";
+            while (switching) {
+                switching = false;
+                rows = table.getElementsByTagName("TBODY")[0].rows;
+                for (i = 0; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    
+                    var xVal = x.getAttribute('data-order') || x.innerText || x.textContent;
+                    var yVal = y.getAttribute('data-order') || y.innerText || y.textContent;
+                    
+                    if (!isNaN(xVal) && !isNaN(yVal) && xVal !== "" && yVal !== "") {
+                        xVal = parseFloat(xVal);
+                        yVal = parseFloat(yVal);
+                    } else {
+                        xVal = xVal.toLowerCase();
+                        yVal = yVal.toLowerCase();
+                    }
+
+                    if (dir == "asc") {
+                        if (xVal > yVal) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir == "desc") {
+                        if (xVal < yVal) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;
+                } else {
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
+            }
+            updateSortIcons(n, dir);
+        }
+
+        function updateSortIcons(n, dir) {
+            var headers = document.querySelectorAll("th .sort-icon");
+            headers.forEach((icon, index) => {
+                if (index === n) {
+                    icon.innerText = dir === "asc" ? "▲" : "▼";
+                } else {
+                    icon.innerText = "⇅";
+                }
+            });
+        }
+
+        function filterTable() {
+            var inputs = document.querySelectorAll(".filter-row input, .filter-row select");
+            var table = document.getElementById("criteriaTable");
+            var rows = table.getElementsByTagName("TBODY")[0].rows;
+
+            for (var i = 0; i < rows.length; i++) {
+                var showRow = true;
+                for (var j = 0; j < inputs.length; j++) {
+                    var filter = inputs[j].value.toLowerCase();
+                    if (!filter) continue;
+
+                    var td = rows[i].getElementsByTagName("TD")[j];
+                    if (td) {
+                        var text;
+                        if (td.querySelector('input')) {
+                            text = td.querySelector('input').value;
+                        } else if (td.querySelector('select')) {
+                            text = td.querySelector('select').options[td.querySelector('select').selectedIndex].text;
+                        } else {
+                            text = td.textContent || td.innerText;
+                        }
+                        
+                        if (text.toLowerCase().indexOf(filter) === -1) {
+                            showRow = false;
+                            break;
+                        }
+                    }
+                }
+                rows[i].style.display = showRow ? "" : "none";
+            }
+        }
+    </script>
 </body>
 </html>

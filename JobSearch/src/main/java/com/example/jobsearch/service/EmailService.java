@@ -1,6 +1,8 @@
 package com.example.jobsearch.service;
 
 import com.example.jobsearch.entity.JobListing;
+import com.example.jobsearch.entity.JobMatch;
+import com.example.jobsearch.entity.Person;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,27 +26,39 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    public void sendJobNotification(JobListing job) {
-        if (fromEmail.isEmpty() || toEmail.isEmpty() || fromEmail.contains("YOUR_YAHOO")) {
-            log.warn("Email not configured. Skipping.");
+    public void sendJobNotification(JobMatch match) {
+        if (fromEmail.isEmpty() || fromEmail.contains("YOUR_YAHOO")) {
+            log.warn("Email sender not configured. Skipping.");
+            return;
+        }
+
+        JobListing job = match.getJobListing();
+        Person person = match.getPerson();
+        String personName = person.getName();
+        String recipientEmail = person.getEmail() != null ? person.getEmail() : toEmail;
+
+        if (recipientEmail == null || recipientEmail.isEmpty()) {
+            log.warn("No recipient email found for {}. Skipping.", personName);
             return;
         }
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
-            message.setTo(toEmail);
-            message.setSubject("New Job Match: " + job.getTitle() + " (" + job.getRelevanceScore() + "%)");
+            message.setTo(recipientEmail);
+            
+            String scoreText = match.getRelevanceScore() != null ? match.getRelevanceScore() + "%" : "Possible Match";
+            message.setSubject("New Job Match for " + personName + ": " + job.getTitle() + " (" + scoreText + ")");
             
             String body = String.format("""
-                Hi Maya,
+                Hi %s,
                 
-                I found a new job listing for you in Winchester:
+                I found a new job listing for you in %s:
                 
                 Title: %s
                 Company: %s
                 Location: %s
-                Match Score: %d%%
+                Match Score: %s
                 
                 AI INSIGHT:
                 %s
@@ -54,11 +68,13 @@ public class EmailService {
                 
                 Good luck!
                 """, 
+                personName,
+                match.getTown(),
                 job.getTitle(), 
                 job.getCompany(), 
                 job.getLocation(), 
-                job.getRelevanceScore(),
-                job.getMatchReason(),
+                scoreText,
+                match.getMatchReason() != null ? match.getMatchReason() : "None",
                 job.getUrl());
             
             message.setText(body);

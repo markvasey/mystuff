@@ -14,9 +14,10 @@
         .job-source { font-size: 0.8em; background: #eee; padding: 2px 6px; border-radius: 4px; }
         .tabs { margin-bottom: 20px; border-bottom: 2px solid #ddd; }
         .tab-link { display: inline-block; padding: 10px 20px; text-decoration: none; color: #333; border-radius: 8px 8px 0 0; border: 1px solid transparent; }
-        .tab-link.active { background: #007bff; color: white; font-weight: bold; border: 1px solid #007bff; }
+        .tab-link.person-tab { background: #e9ecef; border-bottom: 2px solid #ccc; margin-right: 5px; }
+        .tab-link.active { background: #007bff; color: white; font-weight: bold; border: 1px solid #007bff; border-bottom: 2px solid #007bff; }
         .tab-link.active-possible { background: #17a2b8; color: white; font-weight: bold; border: 1px solid #17a2b8; }
-        .tab-link:hover:not(.active):not(.active-possible) { background: #e9ecef; }
+        .tab-link:hover:not(.active):not(.active-possible) { background: #dee2e6; }
         .count-info { margin-left: 15px; color: #666; font-size: 0.9em; }
         .btn { padding: 8px 15px; border-radius: 4px; text-decoration: none; font-weight: bold; border: none; cursor: pointer; display: inline-block; font-size: 0.9em; }
         .btn-manage { background: #007bff; color: white; margin-left: 10px; }
@@ -49,29 +50,38 @@
         </div>
     </div>
     
+    <div class="tabs" style="border-bottom: none; margin-bottom: 10px;">
+        <span th:each="person : ${people}">
+            <a th:href="@{/(personId=${person.id}, status=${currentStatus}, minScore=${currentMinScore})}"
+               th:class="'tab-link person-tab' + (${selectedPersonId == person.id} ? ' active' : '')"
+               th:text="${person.name}">Person Name</a>
+        </span>
+    </div>
+
     <div class="tabs">
         <!-- Active Tabs -->
         <span th:each="townName : ${activeTowns}">
-            <a th:href="@{/(status='ACTIVE', town=${townName}, minScore=${currentMinScore})}" 
+            <a th:href="@{/(personId=${selectedPersonId}, status='ACTIVE', town=${townName}, minScore=${currentMinScore})}" 
                th:class="'tab-link' + (${currentStatus == 'ACTIVE' && currentTown == townName} ? ' active' : '')"
                th:text="'Active (' + ${townName} + ')'">Active (Town)</a>
         </span>
 
         <!-- Possible Tabs -->
         <span th:each="townName : ${activeTowns}">
-            <a th:href="@{/(status='POSSIBLE', town=${townName}, minScore=${currentMinScore})}" 
+            <a th:href="@{/(personId=${selectedPersonId}, status='POSSIBLE', town=${townName}, minScore=${currentMinScore})}" 
                th:class="'tab-link' + (${currentStatus == 'POSSIBLE' && currentTown == townName} ? ' active-possible' : '')"
                th:text="'Possible (' + ${townName} + ')'">Possible (Town)</a>
         </span>
         
-        <a th:href="@{/(status='EMAILED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'EMAILED'} ? ' active' : '')">Emailed to Maya</a>
-        <a th:href="@{/(status='ARCHIVED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'ARCHIVED'} ? ' active' : '')">Archived</a>
+        <a th:href="@{/(personId=${selectedPersonId}, status='EMAILED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'EMAILED'} ? ' active' : '')">Emailed</a>
+        <a th:href="@{/(personId=${selectedPersonId}, status='ARCHIVED', minScore=${currentMinScore})}" th:class="'tab-link' + (${currentStatus == 'ARCHIVED'} ? ' active' : '')">Archived</a>
     </div>
 
     <div id="results-container" th:fragment="resultsFragment">
         <div class="stats" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <form th:if="${currentStatus == 'ACTIVE'}" action="/" method="get" style="display: inline-block;">
+                    <input type="hidden" name="personId" th:value="${selectedPersonId}" />
                     <input type="hidden" name="status" th:value="${currentStatus}" />
                     <input type="hidden" name="town" th:value="${currentTown}" />
                     <label>Minimum Match %:</label>
@@ -117,16 +127,16 @@
                     
                     <button class="btn-action" data-action="email" th:data-id="${job.id}" onclick="handleAction(this)"
                             style="font-size: 0.7em; background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 5px;"
-                            th:text="${job.status == 'EMAILED'} ? 'Re-send Email' : 'Email to Maya'">Email to Maya</button>
+                            th:text="${job.status == 'EMAILED'} ? 'Re-send Email' : ('Email to ' + ${job.person.name})">Email to Person</button>
                 </div>
             </div>
-            <a th:href="${job.url}" class="job-title" th:text="${job.title}" target="_blank">Job Title</a>
+            <a th:href="${job.jobListing.url}" class="job-title" th:text="${job.jobListing.title}" target="_blank">Job Title</a>
             <div class="job-meta">
-                <span th:text="${job.company}">Company</span> - <span th:text="${job.location}">Location</span>
-                | <span class="job-source" th:text="${job.source}">Source</span>
-                | Posted: <span th:text="${#temporals.format(job.postedAt, 'dd-MM-yyyy HH:mm')}">Date</span>
+                <span th:text="${job.jobListing.company}">Company</span> - <span th:text="${job.jobListing.location}">Location</span>
+                | <span class="job-source" th:text="${job.jobListing.source}">Source</span>
+                | Posted: <span th:text="${#temporals.format(job.jobListing.postedAt, 'dd-MM-yyyy HH:mm')}">Date</span>
             </div>
-            <div th:text="${#strings.abbreviate(job.description, 200)}" style="margin-top:10px;">Description...</div>
+            <div th:text="${#strings.abbreviate(job.jobListing.description, 200)}" style="margin-top:10px;">Description...</div>
             
             <!-- Only show AI Insight for non-POSSIBLE jobs -->
             <div th:if="${job.matchReason != null && job.status != 'POSSIBLE'}" style="margin-top:10px; font-style: italic; color: #555; font-size: 0.85em;">
@@ -141,12 +151,13 @@
 
     <script th:inline="javascript">
         let lastKnownTotal = [[${totalActiveAllTowns}]];
+        const currentPersonId = [[${selectedPersonId}]];
         const currentTown = [[${currentTown}]];
         const currentStatus = [[${currentStatus}]];
         const currentMinScore = [[${currentMinScore}]];
 
         function checkStatus() {
-            fetch('/api/status')
+            fetch('/api/status?personId=' + currentPersonId)
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('total-active-count').innerText = data.totalActive;
@@ -177,6 +188,7 @@
             
             const formData = new FormData();
             formData.append('id', jobId);
+            formData.append('personId', currentPersonId);
             formData.append('minScore', currentMinScore);
             if (currentTown) formData.append('town', currentTown);
 
@@ -215,6 +227,7 @@
             if (!confirm(`Archive all ${count} visible jobs from this tab?`)) return;
 
             const formData = new FormData();
+            formData.append('personId', currentPersonId);
             formData.append('town', town);
             formData.append('minScore', minScore);
             formData.append('status', status);
@@ -262,7 +275,7 @@
         }
 
         function refreshResults() {
-            const url = `/?status=${currentStatus}&minScore=${currentMinScore}${currentTown ? '&town=' + currentTown : ''}&fragment=results`;
+            const url = `/?personId=${currentPersonId}&status=${currentStatus}&minScore=${currentMinScore}${currentTown ? '&town=' + currentTown : ''}&fragment=results`;
             fetch(url)
                 .then(response => response.text())
                 .then(html => {

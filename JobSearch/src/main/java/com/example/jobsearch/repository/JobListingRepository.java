@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface JobListingRepository extends JpaRepository<JobListing, UUID> {
     Optional<JobListing> findByExternalIdAndSource(String externalId, String source);
-    List<JobListing> findByTitleAndCompanyAndTown(String title, String company, String town);
+    List<JobListing> findByTitleAndCompanyAndLocation(String title, String company, String location);
 }

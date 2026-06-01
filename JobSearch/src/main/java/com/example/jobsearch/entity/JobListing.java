@@ -20,7 +20,6 @@ public class JobListing {
 
     private String company;
     private String location;
-    private String town;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -29,12 +28,6 @@ public class JobListing {
     private String salaryInfo;
     private LocalDateTime postedAt;
     private LocalDateTime createdAt = LocalDateTime.now();
-
-    private Integer relevanceScore;
-    @Column(columnDefinition = "TEXT")
-    private String matchReason;
-
-    private String status = "ACTIVE"; // ACTIVE, ARCHIVED, CLOSED
 
     // Getters and Setters
     public UUID getId() { return id; }
@@ -49,8 +42,6 @@ public class JobListing {
     public void setCompany(String company) { this.company = company; }
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
-    public String getTown() { return town; }
-    public void setTown(String town) { this.town = town; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public String getUrl() { return url; }
@@ -61,10 +52,4 @@ public class JobListing {
     public void setPostedAt(LocalDateTime postedAt) { this.postedAt = postedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public Integer getRelevanceScore() { return relevanceScore; }
-    public void setRelevanceScore(Integer relevanceScore) { this.relevanceScore = relevanceScore; }
-    public String getMatchReason() { return matchReason; }
-    public void setMatchReason(String matchReason) { this.matchReason = matchReason; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
 }
