@@ -115,6 +115,7 @@ public class DashboardController {
         model.addAttribute("totalActiveAllTowns", totalActiveAllTowns);
 
         model.addAttribute("people", people);
+        model.addAttribute("selectedPerson", selectedPerson);
         model.addAttribute("selectedPersonId", selectedPerson.getId());
         model.addAttribute("currentMinScore", minScore);
         model.addAttribute("currentStatus", status);
