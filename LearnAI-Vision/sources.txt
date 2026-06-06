@@ -1,0 +1,11 @@
+src/test/java/com/learnai/TestRunner.java
+src/main/java/com/learnai/nn/ReLULayer.java
+src/main/java/com/learnai/nn/GlobalAveragePoolingLayer.java
+src/main/java/com/learnai/nn/SelfAttentionLayer.java
+src/main/java/com/learnai/nn/Layer.java
+src/main/java/com/learnai/nn/DenseLayer.java
+src/main/java/com/learnai/nn/NeuralNetwork.java
+src/main/java/com/learnai/nn/SoftmaxLayer.java
+src/main/java/com/learnai/vision/ImageProcessor.java
+src/main/java/com/learnai/cli/VisionCLI.java
+src/main/java/com/learnai/math/Matrix.java

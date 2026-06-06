@@ -1,0 +1,11 @@
+bin/
+Training/
+
+# IDE and metadata files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.DS_Store
