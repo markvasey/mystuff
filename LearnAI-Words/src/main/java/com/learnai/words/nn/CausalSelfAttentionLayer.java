@@ -58,15 +58,55 @@ public class CausalSelfAttentionLayer implements Layer {
         Matrix X = state.input;
         Matrix A = state.attnWeights;
         
-        // Verified simplified backward logic that passes GradientCheck
+        // 1. dL/dV = A^T * dOut
         Matrix dV = A.multiply(outputGradient, true, false); 
         Matrix dWv = X.multiply(dV, true, false);
 
-        Matrix gradX = A.multiply(outputGradient).multiply(wv, false, true);
+        // 2. dL/dA = dOut * V^T
+        Matrix V = X.multiply(wv);
+        Matrix dA = outputGradient.multiply(V, false, true);
+        
+        // 3. dS (Softmax backward)
+        Matrix dS = new Matrix(A.getRows(), A.getCols());
+        for (int i = 0; i < A.getRows(); i++) {
+            double dot = 0;
+            for (int k_idx = 0; k_idx < A.getCols(); k_idx++) {
+                dot += dA.get(i, k_idx) * A.get(i, k_idx);
+            }
+            for (int j = 0; j < A.getCols(); j++) {
+                dS.set(i, j, A.get(i, j) * (dA.get(i, j) - dot));
+            }
+        }
+        
+        // 4. dQ, dK through Scaling and Masking
+        double scale = 1.0 / Math.sqrt(d_model);
+        for (int i = 0; i < dS.getRows(); i++) {
+            for (int j = 0; j < dS.getCols(); j++) {
+                dS.set(i, j, dS.get(i, j) * scale);
+                if (j > i) dS.set(i, j, 0); 
+            }
+        }
+
+        Matrix Q = X.multiply(wq);
+        Matrix K = X.multiply(wk);
+        
+        Matrix dQ = dS.multiply(K);
+        Matrix dK = dS.multiply(Q, true, false); // dS^T * Q
+        
+        Matrix dWq = X.multiply(dQ, true, false);
+        Matrix dWk = X.multiply(dK, true, false);
 
         if (learningRate > 0) {
+            qOpt.update(wq, dWq, learningRate);
+            kOpt.update(wk, dWk, learningRate);
             vOpt.update(wv, dWv, learningRate);
         }
+
+        // 5. Input Gradient (Backprop to X)
+        // dX = dQ*Wq^T + dK*Wk^T + dV*Wv^T
+        Matrix gradX = dQ.multiply(wq, false, true);
+        gradX.addInPlace(dK.multiply(wk, false, true));
+        gradX.addInPlace(dV.multiply(wv, false, true));
 
         return gradX;
     }
