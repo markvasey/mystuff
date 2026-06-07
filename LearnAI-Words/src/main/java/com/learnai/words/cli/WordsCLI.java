@@ -24,7 +24,7 @@ public class WordsCLI {
     private static final int D_MODEL = 64;
     private static final double LEARNING_RATE = 0.001;
     private static final int EPOCHS = 5;
-    private static final int THREADS = 1; // Single-threaded test
+    private static final int THREADS = 14; // Multi-threaded production
 
     public static void main(String[] args) throws IOException {
         logger.info("--- LearnAI-Words LLM Training (Ultra-Responsive) ---");

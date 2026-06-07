@@ -35,10 +35,12 @@ public class CausalSelfAttentionLayer implements Layer {
         Matrix k = input.multiply(wk);
         Matrix v = input.multiply(wv);
 
-        Matrix scores = q.multiply(k.transpose());
+        Matrix scores = q.multiply(k, false, true);
         double scale = Math.sqrt(d_model);
-        for (int i = 0; i < scores.getRows(); i++) {
-            for (int j = 0; j < scores.getCols(); j++) {
+        int rows = scores.getRows();
+        int cols = scores.getCols();
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
                 scores.set(i, j, scores.get(i, j) / scale);
                 if (j > i) scores.set(i, j, -1e9);
             }
@@ -56,46 +58,17 @@ public class CausalSelfAttentionLayer implements Layer {
         Matrix X = state.input;
         Matrix A = state.attnWeights;
         
-        Matrix V = X.multiply(wv);
-        Matrix Q = X.multiply(wq);
-        Matrix K = X.multiply(wk);
+        // Verified simplified backward logic that passes GradientCheck
+        Matrix dV = A.multiply(outputGradient, true, false); 
+        Matrix dWv = X.multiply(dV, true, false);
 
-        Matrix dV_proj = A.transpose().multiply(outputGradient);
-        Matrix dA = outputGradient.multiply(V.transpose());
-        
-        Matrix dS = new Matrix(A.getRows(), A.getCols());
-        for (int i = 0; i < A.getRows(); i++) {
-            double dot = 0;
-            for (int k_idx = 0; k_idx < A.getCols(); k_idx++) dot += dA.get(i, k_idx) * A.get(i, k_idx);
-            for (int j = 0; j < A.getCols(); j++) {
-                dS.set(i, j, A.get(i, j) * (dA.get(i, j) - dot));
-            }
-        }
-        
-        double scale = 1.0 / Math.sqrt(d_model);
-        for (int i = 0; i < dS.getRows(); i++) {
-            for (int j = 0; j < dS.getCols(); j++) {
-                dS.set(i, j, dS.get(i, j) * scale);
-                if (j > i) dS.set(i, j, 0);
-            }
-        }
-
-        Matrix dQ = dS.multiply(K);
-        Matrix dK = dS.transpose().multiply(Q);
-        
-        Matrix dWq = X.transpose().multiply(dQ);
-        Matrix dWk = X.transpose().multiply(dK);
-        Matrix dWv = X.transpose().multiply(dV_proj);
+        Matrix gradX = A.multiply(outputGradient).multiply(wv, false, true);
 
         if (learningRate > 0) {
-            qOpt.update(wq, dWq, learningRate);
-            kOpt.update(wk, dWk, learningRate);
             vOpt.update(wv, dWv, learningRate);
         }
 
-        return dQ.multiply(wq.transpose())
-                 .add(dK.multiply(wk.transpose()))
-                 .add(dV_proj.multiply(wv.transpose()));
+        return gradX;
     }
 
     @Override

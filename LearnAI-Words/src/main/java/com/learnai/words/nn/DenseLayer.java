@@ -27,16 +27,21 @@ public class DenseLayer implements Layer {
     @Override
     public Matrix backward(Matrix outputGradient, Object context, double learningRate) {
         Matrix lastInput = (Matrix) context;
-        Matrix weightsGradient = lastInput.transpose().multiply(outputGradient);
+        // Efficient: [InputDim x SeqLen] * [SeqLen x OutputDim] -> [InputDim x OutputDim]
+        Matrix weightsGradient = lastInput.multiply(outputGradient, true, false);
         
         Matrix biasGradient = new Matrix(1, bias.getCols());
-        for (int i = 0; i < outputGradient.getRows(); i++) {
-            for (int j = 0; j < outputGradient.getCols(); j++) {
-                biasGradient.set(0, j, biasGradient.get(0, j) + outputGradient.get(i, j));
+        double[] bg = biasGradient.getData();
+        int rows = outputGradient.getRows();
+        int cols = outputGradient.getCols();
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                bg[j] += outputGradient.get(i, j);
             }
         }
 
-        Matrix inputGradient = outputGradient.multiply(weights.transpose());
+        // Efficient: [SeqLen x OutputDim] * [OutputDim x InputDim] -> [SeqLen x InputDim]
+        Matrix inputGradient = outputGradient.multiply(weights, false, true);
 
         if (learningRate > 0) {
             weightsOpt.update(weights, weightsGradient, learningRate);

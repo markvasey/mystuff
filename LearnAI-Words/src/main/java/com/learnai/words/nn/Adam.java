@@ -29,8 +29,9 @@ public class Adam {
         double biasCorr2 = 1.0 - Math.pow(beta2, t);
 
         for (int i = 0; i < wData.length; i++) {
-            mData[i] = beta1 * mData[i] + (1.0 - beta1) * gData[i];
-            vData[i] = beta2 * vData[i] + (1.0 - beta2) * gData[i] * gData[i];
+            double g = gData[i];
+            mData[i] = beta1 * mData[i] + (1.0 - beta1) * g;
+            vData[i] = beta2 * vData[i] + (1.0 - beta2) * g * g;
             
             double mHat = mData[i] / biasCorr1;
             double vHat = vData[i] / biasCorr2;
