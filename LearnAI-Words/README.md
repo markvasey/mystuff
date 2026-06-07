@@ -1,104 +1,97 @@
 # LearnAI-Words: Pure Java LLM from Scratch
 
-`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 25**, without any external machine learning libraries. It demonstrates the underlying mathematics of the Transformer architecture through a clean, readable, and highly optimized implementation.
+`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 25**, without any external machine learning libraries. It is designed as a "glass box" for students and engineers to see exactly how modern AI works from the inside out.
 
 ---
 
 ## 🚀 Phase 2 Enhancements: The "Smart Student"
-We have recently transitioned from Phase 1 (Character-level) to **Phase 2**, introducing surgical optimizations and architectural scaling:
-- **Subword BPE Tokenization**: A **1,000-token Byte Pair Encoding (BPE)** vocabulary allows the model to "think" in word parts (e.g., `["Sher", "lock"]`). 
-- **Robustness (UNK Token)**: Added a dedicated **`<UNK>` (Unknown) token (ID 256)** to handle exotic Unicode characters (like curly quotes) without crashing, ensuring stable training across diverse texts.
-- **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** (Incubator) to perform vectorized matrix multiplication. By processing multiple data points per CPU cycle (SIMD), we achieve a **2x performance boost**.
-- **High Throughput**: Currently training at **100+ sequences per second** on a 13th Gen i7, reducing epoch time from 25 minutes to roughly **10 minutes**.
-- **14-Core Parallelism**: Uses a custom `ForkJoinPool` with a real-time heartbeat monitor and per-epoch text generation samples.
+- **Subword BPE Tokenization**: A **1,000-token Byte Pair Encoding (BPE)** vocabulary allows the model to "think" in word parts. 
+- **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** for a **2x performance boost** (100+ seq/s).
+- **14-Core Parallelism**: Uses a custom `ForkJoinPool` for highly efficient training.
 
 ---
 
-## 📊 Model Specifications & Dimensions
+## 🧠 Intuition: How it Works
 
-The model is a deep Transformer optimized for semantic generalization over rote memorization.
+### **The "Word Spotlight" (Attention)**
+Self-Attention is the "secret sauce" of LLMs. Think of it as a **dynamic spotlight**. In the sentence *"The **bank** of the **river** was muddy,"* the attention layer uses the word **"river"** to put a spotlight on **"bank."** This tells the model: *"In this specific sentence, 'bank' means land, not a financial building."*
 
-### Layer Stack (16 Core Stages)
-1.  **Input Embedding** ($1000 \times 192$)
-2.  **Positional Encoding** (Fixed Sine/Cosine)
-3.  **Transformer Blocks (x3)**:
-    *   2x Layer Norms per block
-    *   1x Causal Self-Attention ($192 \times 192 \times 3$)
-    *   1x Dense Feed-Forward ($192 \times 192$)
-    *   Residual connections and specialized initialization.
-4.  **Final Layer Norm**
-5.  **Language Head** ($192 \times 1000$)
+### **The "Creativity Dial" (Temperature)**
+When generating text, the model doesn't just pick the #1 answer. We use a "Creativity Dial" called **Temperature**:
+- **Low Temperature (0.1):** The model is very focused and conservative. It will always pick the most likely word (e.g., "The quick brown fox").
+- **High Temperature (1.2):** The model becomes "creative" (or "drunk"). It takes risks on less likely words, leading to more poetic or chaotic output.
 
-### Total Parameter Count: **~636,000**
-*   **Embeddings**: 192,000
-*   **Attention Weights**: 331,776
-*   **Dense/FFN Layers**: 110,592 (includes Head)
-*   **Layer Norms**: 1,544
+### **The Semantic Space (Embeddings)**
+Every word is assigned a location in a 192-dimensional "Semantic Space." Over time, the model learns to move related concepts closer together. Through training, the vector for "He" will naturally drift toward the vector for "She," and away from the vector for "Apple."
 
 ---
 
-## 🏗️ Architecture & Design
+## 🎓 Learning Path: 3 Experiments to Run
 
-### System Overview
-This diagram shows how the raw text flows through the system to become a trained model and eventually generated text.
+Use this project as a laboratory to see AI principles in action:
 
-```mermaid
-graph TD
-    Data[Training Data: *.txt] --> BPE[BPE Discovery Tool]
-    BPE --> Tokenizer[BPETokenizer]
-    
-    subgraph "Core Model (Phase 2)"
-        Tokenizer --> LM[LanguageModel]
-        LM --> Block[Transformer Block x3]
-        Block --> Head[Linear Head + Softmax]
-    end
-    
-    subgraph "Optimization Engine"
-        Head --> Backprop[Backpropagation Engine]
-        Backprop --> Adam[Adam Optimizer]
-        Adam --> Matrix[SIMD Vectorized Engine]
-    end
-    
-    LM --> Persistence[model.bin]
-    Persistence --> Generator[TextGenerator]
+1.  **The "Lobotomy" Experiment:** Train for only 1 epoch and generate text. You'll see "alphabet soup." Train for 50 epochs, and you'll see "word salad." Train for 150, and you'll see "sentences."
+2.  **The "Context Stretch":** Find `BLOCK_SIZE` in `WordsCLI.java` and change it from 128 to 16. The model will suddenly "forget" the beginning of a sentence by the time it reaches the end. This proves why "Context Window" is so vital.
+3.  **The "Brain Size" Test:** Double the `D_MODEL` from 192 to 384. Watch how training slows down but the "Avg Loss" drops much faster. This illustrates the trade-off between model capacity and compute cost.
+
+---
+
+## 📂 Diagnostic Tools
+
+### **1. Semantic Probe: Quantifying "Meaning"**
+The `SemanticProbe` is a powerful tool to measure **Distributional Semantics**. It calculates the **Euclidean Distance** between the embedding vectors of two words.
+
+*   **How it works:** In 192-dimensional space, the distance $d$ between two words $P$ and $Q$ is calculated as: $d(P, Q) = \sqrt{\sum_{i=1}^{192} (P_i - Q_i)^2}$.
+*   **What it reveals:** If the distance between "king" and "queen" is lower than the distance between "king" and "carrot," the model has successfully learned that "king" and "queen" are semantically related (often appearing in similar contexts).
+*   **Run it:**
+    ```bash
+    ./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.SemanticProbe"
+    ```
+
+### **2. Tokenizer Inspector**
+See the subword fragments discovered by the BPE process.
+```bash
+./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.InspectTokenizer"
 ```
 
 ---
 
-## 🎓 Philosophical Goal: Generalization over Memorization
+## 🏗️ The LanguageModel Engine
 
-A critical design decision is the balance between **Memorization** and **Generalization**.
-
-### The Smart Student Strategy
-Instead of building a massive "Perfect Library" model that simply quotes books, we use a compact **636k parameter model**. This forces the model to learn the **rules** of English grammar and the **relationships** between subwords (Distributional Semantics) rather than just memorizing character sequences.
-
-| Feature | Phase 1 (Legacy) | Phase 2 (Current) | Why? |
-| :--- | :--- | :--- | :--- |
-| **Tokenizer** | Character | **BPE (Subword)** | To capture semantic word parts. |
-| **`block_size`** | 32 | **128** | To "see" full sentences and context. |
-| **`d_model`** | 128 | **192** | More associative memory for concepts. |
-| **Throughput** | ~50 seq/s | **~105 seq/s** | SIMD-accelerated Matrix math. |
-| **Compute** | ~100s / Epoch | **~10 mins / Epoch** | Deeper context requires more math. |
+The `LanguageModel` class is the central nervous system. It orchestrates:
+1.  **Prediction (Forward):** Passes data through Embedding -> Positional -> Transformer Blocks.
+2.  **Learning (Backward):** Compares predictions to reality, calculates the **Error Gradient**, and sends it back through every layer to adjust the weights.
 
 ---
 
 ## 🛠️ How to Run
 
-### Requirements
-- **JDK 25** (Required for the Vector API)
-- **Maven** (included via `./mvnw`)
+### 1. Train the Tokenizer (Required Once)
+```bash
+./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.BPETrainTool"
+```
 
-### Start Training
-The project uses the `exec-maven-plugin` configured with the necessary JVM flags for the incubator Vector API.
-
+### 2. Start Model Training
 ```bash
 ./mvnw clean compile exec:exec
 ```
 
-### Monitor Progress
+### 3. Monitor Progress
 ```bash
 tail -f training.log
 ```
+
+---
+
+## 📚 Further Reading & Inspiration
+
+To go deeper into the theory behind this implementation, explore these foundational resources:
+
+- **[Attention Is All You Need](https://arxiv.org/abs/1706.03762)**: The original 2017 Google paper that introduced the Transformer architecture used in this project.
+- **[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)**: A brilliant visual guide by Jay Alammar that explains the math through diagrams.
+- **[Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT)**: A spiritual sibling to this project in Python/PyTorch, focused on making GPT simple and hackable.
+- **[Neural Networks and Deep Learning](http://neuralnetworksanddeeplearning.com/)**: Michael Nielsen’s free online book—the gold standard for understanding Backpropagation and Gradient Descent.
+- **[BPE (Byte Pair Encoding) Explained](https://huggingface.co/learn/nlp-course/chapter6/5)**: The HuggingFace guide to the subword tokenization strategy used in Phase 2.
 
 ---
 *Created as part of the LearnAI series - Exploring Artificial Intelligence through fundamental engineering.*
