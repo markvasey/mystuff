@@ -120,6 +120,27 @@ sequenceDiagram
 
 ---
 
+## 🧠 The Learning Cycle: What happens during an Epoch?
+
+During each of the 50 epochs, the model "reads" through 50,000 sequences of classic literature to master the statistical patterns of the English language.
+
+### 1. The Process (The Mechanics)
+For every sequence processed across the 14 parallel threads:
+*   **The Guess (Forward Pass):** The model takes a window of 32 characters and predicts the 33rd.
+*   **The Correction (Backward Pass):** It calculates the error (Loss) between its guess and the actual character from the text. Using the **Chain Rule**, it traces this error back through all 12 layers to identify which weights were responsible.
+*   **The Update (Optimization):** The **Adam Optimizer** nudges the 159,593 parameters in a direction that minimizes future errors.
+
+### 2. The Purpose (The "Why")
+*   **Pattern Refinement:** Early epochs teach the model basic structures (e.g., "words are separated by spaces"). Later epochs teach complex relationships (e.g., "The name 'Sherlock' is usually followed by 'Holmes'").
+*   **Convergence:** Each epoch is a step down the "Loss Mountain" toward the most accurate possible version of the weights.
+*   **Generalization:** By seeing characters in varying contexts across multiple books, the model learns the *rules* of English rather than just memorizing specific lines.
+
+### 3. The Outcome (The Results)
+*   **Intelligent Weights (`model.bin`):** A binary snapshot of the model's "brain." It transforms from random noise into a structured map of human language.
+*   **Generative Power:** As training progresses, the end-of-epoch samples evolve from gibberish into structured words, sentences, and eventually, coherent thoughts.
+
+---
+
 ## 🛠️ How to Run
 
 ### Requirements
