@@ -6,47 +6,55 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public class LayerNorm implements Layer {
-    private Matrix gamma;
-    private Matrix beta;
-    private final double eps = 1e-5;
+    private Matrix gamma; // Gain
+    private Matrix beta;  // Bias
     private final Adam gammaOpt;
     private final Adam betaOpt;
+    private final double eps = 1e-5;
 
     private static class LNState {
         public final Matrix input;
-        public final Matrix mean;
-        public final Matrix var;
         public final Matrix xHat;
-        public LNState(Matrix input, Matrix mean, Matrix var, Matrix xHat) {
-            this.input = input; this.mean = mean; this.var = var; this.xHat = xHat;
+        public final Matrix var;
+        public LNState(Matrix i, Matrix x, Matrix v) {
+            this.input = i;
+            this.xHat = x;
+            this.var = v;
         }
     }
 
     public LayerNorm(int dim) {
         this.gamma = new Matrix(1, dim);
-        for (int i = 0; i < dim; i++) gamma.set(0, i, 1.0);
-        this.beta = new Matrix(1, dim);
+        // Initialize gains to 1.0
+        for (int i = 0; i < dim; i++) this.gamma.set(0, i, 1.0);
+        this.beta = new Matrix(1, dim); // Zero initialized
         this.gammaOpt = new Adam(1, dim);
         this.betaOpt = new Adam(1, dim);
     }
 
     @Override
     public ForwardResult forward(Matrix input) {
+        int N = input.getRows();
+        int D = input.getCols();
+        
         Matrix mean = input.rowMean();
         Matrix var = input.rowVariance(mean);
-        Matrix xHat = new Matrix(input.getRows(), input.getCols());
-        Matrix output = new Matrix(input.getRows(), input.getCols());
-        for (int i = 0; i < input.getRows(); i++) {
+        
+        Matrix xHat = new Matrix(N, D);
+        Matrix output = new Matrix(N, D);
+        
+        for (int i = 0; i < N; i++) {
             double m = mean.get(i, 0);
             double v = var.get(i, 0);
             double invStd = 1.0 / Math.sqrt(v + eps);
-            for (int j = 0; j < input.getCols(); j++) {
+            for (int j = 0; j < D; j++) {
                 double xh = (input.get(i, j) - m) * invStd;
                 xHat.set(i, j, xh);
                 output.set(i, j, xh * gamma.get(0, j) + beta.get(0, j));
             }
         }
-        return new ForwardResult(output, new LNState(input, mean, var, xHat));
+        
+        return new ForwardResult(output, new LNState(input, xHat, var));
     }
 
     @Override
@@ -54,16 +62,20 @@ public class LayerNorm implements Layer {
         LNState state = (LNState) context;
         int N = outputGradient.getRows();
         int D = outputGradient.getCols();
+
         Matrix dGamma = new Matrix(1, D);
         Matrix dBeta = new Matrix(1, D);
         Matrix dXHat = new Matrix(N, D);
+
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < D; j++) {
-                dGamma.set(0, j, dGamma.get(0, j) + outputGradient.get(i, j) * state.xHat.get(i, j));
-                dBeta.set(0, j, dBeta.get(0, j) + outputGradient.get(i, j));
-                dXHat.set(i, j, outputGradient.get(i, j) * gamma.get(0, j));
+                double outGrad = outputGradient.get(i, j);
+                dGamma.set(0, j, dGamma.get(0, j) + outGrad * state.xHat.get(i, j));
+                dBeta.set(0, j, dBeta.get(0, j) + outGrad);
+                dXHat.set(i, j, outGrad * gamma.get(0, j));
             }
         }
+
         Matrix dInput = new Matrix(N, D);
         Matrix dXHat_rowMean = dXHat.rowMean();
         Matrix xHat_dXHat_rowMean = dXHat.multiplyElementWise(state.xHat).rowMean();
@@ -79,10 +91,12 @@ public class LayerNorm implements Layer {
                 dInput.set(i, j, val);
             }
         }
+
         if (learningRate > 0) {
             gammaOpt.update(gamma, dGamma, learningRate);
             betaOpt.update(beta, dBeta, learningRate);
         }
+
         return dInput;
     }
 

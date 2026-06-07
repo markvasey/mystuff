@@ -28,17 +28,13 @@ public class LanguageModel {
         this.embedding = new EmbeddingLayer(vocabSize, d_model);
         this.positional = new PositionalEncoding(maxLen, d_model);
         
-        // Block 1: Attention + FeedForward
-        layers.add(new LayerNorm(d_model));
-        layers.add(new ResidualBlock(new CausalSelfAttentionLayer(d_model)));
-        layers.add(new LayerNorm(d_model));
-        layers.add(new ResidualBlock(new DenseLayer(d_model, d_model)));
-
-        // Block 2: Attention + FeedForward
-        layers.add(new LayerNorm(d_model));
-        layers.add(new ResidualBlock(new CausalSelfAttentionLayer(d_model)));
-        layers.add(new LayerNorm(d_model));
-        layers.add(new ResidualBlock(new DenseLayer(d_model, d_model)));
+        // 3 Transformer Blocks for Phase 2
+        for (int i = 0; i < 3; i++) {
+            layers.add(new LayerNorm(d_model));
+            layers.add(new ResidualBlock(new CausalSelfAttentionLayer(d_model)));
+            layers.add(new LayerNorm(d_model));
+            layers.add(new ResidualBlock(new DenseLayer(d_model, d_model)));
+        }
 
         // Output Head
         layers.add(new LayerNorm(d_model));
@@ -66,25 +62,27 @@ public class LanguageModel {
     }
 
     public double train(int[] tokenIds, int targetId, double learningRate) {
-        // Forward
         ModelForwardResult fwd = forward(tokenIds);
         Matrix probs = fwd.finalProbs;
-        
         int seqLen = tokenIds.length;
-        Matrix target = new Matrix(seqLen, probs.getCols());
+        int vocabSize = probs.getCols();
+
+        double prob = Math.clamp(probs.get(seqLen - 1, targetId), 1e-12, 1.0);
+        double loss = -Math.log(prob);
+
+        Matrix target = new Matrix(seqLen, vocabSize);
         target.set(seqLen - 1, targetId, 1.0);
 
-        double loss = -Math.log(Math.max(probs.get(seqLen - 1, targetId), 1e-10));
+        Matrix gradient = softmax.backward(target, fwd.finalProbs, learningRate);
 
-        // Backward
-        Matrix fullGradient = softmax.backward(target, fwd.finalProbs, learningRate);
-        
-        Matrix lastTokenGradient = new Matrix(seqLen, fullGradient.getCols());
-        for (int j = 0; j < fullGradient.getCols(); j++) {
-            lastTokenGradient.set(seqLen - 1, j, fullGradient.get(seqLen - 1, j));
+        // Global Gradient Clipping (Clip norm to 1.0)
+        double norm = Math.sqrt(gradient.square().rowMean().rowMean().get(0, 0));
+        if (norm > 1.0) {
+            double scale = 1.0 / norm;
+            double[] d = gradient.getData();
+            for (int i = 0; i < d.length; i++) d[i] *= scale;
         }
-
-        Matrix gradient = lastTokenGradient;
+        
         for (int i = layers.size() - 1; i >= 0; i--) {
             gradient = layers.get(i).backward(gradient, fwd.layerContexts.get(i), learningRate);
         }
@@ -94,16 +92,12 @@ public class LanguageModel {
         return loss;
     }
     
-    public EmbeddingLayer getEmbedding() { return embedding; }
-
     public void save(String path) throws java.io.IOException {
         try (java.io.DataOutputStream dos = new java.io.DataOutputStream(new java.io.FileOutputStream(path))) {
             embedding.save(dos);
             positional.save(dos);
             dos.writeInt(layers.size());
-            for (Layer layer : layers) {
-                layer.save(dos);
-            }
+            for (Layer layer : layers) layer.save(dos);
         }
     }
 
@@ -112,9 +106,7 @@ public class LanguageModel {
             embedding.load(dis);
             positional.load(dis);
             int layerCount = dis.readInt();
-            for (int i = 0; i < layerCount; i++) {
-                layers.get(i).load(dis);
-            }
+            for (int i = 0; i < layerCount; i++) layers.get(i).load(dis);
         }
     }
 }

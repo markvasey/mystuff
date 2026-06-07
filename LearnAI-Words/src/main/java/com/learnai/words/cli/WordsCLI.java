@@ -1,17 +1,16 @@
 package com.learnai.words.cli;
 
-import com.learnai.words.math.Matrix;
 import com.learnai.words.nn.LanguageModel;
 import com.learnai.words.nn.TextGenerator;
-import com.learnai.words.tokenizer.CharacterTokenizer;
+import com.learnai.words.tokenizer.BPETokenizer;
 import com.learnai.words.tokenizer.TextDataset;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,90 +19,134 @@ import java.util.stream.Collectors;
 
 public class WordsCLI {
     private static final Logger logger = LoggerFactory.getLogger(WordsCLI.class);
-    private static final int BLOCK_SIZE = 32;
-    private static final int D_MODEL = 128;
-    private static final double LEARNING_RATE = 0.001;
-    private static final int EPOCHS = 50;
-    private static final int THREADS = 14; // Multi-threaded production
+    
+    // Phase 2 Hyperparameters
+    private static final int BLOCK_SIZE = 128;
+    private static final int D_MODEL = 192;
+    private static final double LEARNING_RATE = 0.0005;
+    private static final int EPOCHS = 150;
+    private static final int THREADS = 14;
 
     public static void main(String[] args) throws IOException {
-        logger.info("--- LearnAI-Words LLM Training (Ultra-Responsive) ---");
+        logger.info("--- Phase 2: Smart Student Training (BPE + 18 Layers) ---");
+
+        BPETokenizer tokenizer = new BPETokenizer();
+        Path tokPath = Path.of("tokenizer.bin");
+        if (Files.exists(tokPath)) {
+            logger.info("Loading BPE Tokenizer...");
+            tokenizer.load(tokPath.toString());
+        } else {
+            logger.error("tokenizer.bin not found! Run BPETrainTool first.");
+            return;
+        }
 
         List<Path> trainingFiles = Files.list(Path.of("Training"))
                 .filter(p -> p.toString().endsWith(".txt"))
                 .collect(Collectors.toList());
 
-        TextDataset dataset = new TextDataset(trainingFiles);
-        CharacterTokenizer tokenizer = dataset.getTokenizer();
+        StringBuilder corpusBuilder = new StringBuilder();
+        for (Path f : trainingFiles) corpusBuilder.append(Files.readString(f)).append("\n");
+        String fullText = corpusBuilder.toString();
         
+        int[] allTokens = tokenizer.encode(fullText);
+        logger.info("Total tokens in corpus: {}", allTokens.length);
+
         LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), D_MODEL, BLOCK_SIZE);
+        logger.info("Vocabulary Size: {}", tokenizer.getVocabSize());
         Path modelPath = Path.of("model.bin");
         if (Files.exists(modelPath)) {
-            logger.info("Loading existing model...");
+            logger.info("Resuming from existing model...");
             model.load(modelPath.toString());
         }
 
-        TextGenerator generator = new TextGenerator(model, tokenizer, BLOCK_SIZE);
-        final List<TextDataset.SequencePair> allSequences = dataset.getSequences(BLOCK_SIZE);
-        final List<TextDataset.SequencePair> sequences = allSequences.subList(0, Math.min(allSequences.size(), 50000));
-        
-        int totalSequences = sequences.size();
-        logger.info("Total training sequences: {}", totalSequences);
+        // Prepare training sequences efficiently
+        record SequencePair(int[] input, int target) {}
+        List<SequencePair> pairs = new ArrayList<>();
+        int outOfBoundsCount = 0;
+        int maxTokenSeen = 0;
+        for (int i = 0; i < allTokens.length - BLOCK_SIZE - 1; i += 10) {
+            int[] seq = new int[BLOCK_SIZE];
+            System.arraycopy(allTokens, i, seq, 0, BLOCK_SIZE);
+            int target = allTokens[i + BLOCK_SIZE];
+            
+            boolean valid = true;
+            for (int t : seq) {
+                if (t >= tokenizer.getVocabSize()) { valid = false; maxTokenSeen = Math.max(maxTokenSeen, t); }
+            }
+            if (target >= tokenizer.getVocabSize()) { valid = false; maxTokenSeen = Math.max(maxTokenSeen, target); }
 
-        ForkJoinPool customThreadPool = new ForkJoinPool(THREADS);
+            if (valid) {
+                pairs.add(new SequencePair(seq, target));
+            } else {
+                outOfBoundsCount++;
+            }
+        }
+        
+        if (outOfBoundsCount > 0) {
+            logger.warn("Skipped {} sequences due to out-of-bounds tokens (Max token: {}, Vocab size: {})", 
+                outOfBoundsCount, maxTokenSeen, tokenizer.getVocabSize());
+        }
+        
+        int totalSequences = Math.min(pairs.size(), 100000);
+        final List<SequencePair> trainingBatch = pairs.subList(0, totalSequences);
+        logger.info("Training on {} sequences", totalSequences);
+
+        ForkJoinPool pool = new ForkJoinPool(THREADS);
         try {
             for (int epoch = 1; epoch <= EPOCHS; epoch++) {
                 final DoubleAdder totalLoss = new DoubleAdder();
                 final AtomicInteger processed = new AtomicInteger(0);
-                long start = System.currentTimeMillis();
-                
-                logger.info("Starting Epoch {}", epoch);
-                final int currentEpoch = epoch;
-                final int tSeq = totalSequences;
                 final long epochStart = System.currentTimeMillis();
+                final int currentEpoch = epoch;
                 
-                customThreadPool.submit(() -> 
-                    sequences.parallelStream().forEach(pair -> {
-                        long startStep = System.nanoTime();
+                // High-frequency Heartbeat Thread
+                Thread heartbeat = new Thread(() -> {
+                    try {
+                        while (processed.get() < totalSequences) {
+                            Thread.sleep(10000);
+                            int count = processed.get();
+                            double elapsed = (System.currentTimeMillis() - epochStart) / 1000.0;
+                            double tput = (elapsed > 0) ? (count / elapsed) : 0;
+                            logger.info("Heartbeat - Epoch {}: {}/{} (Throughput: {} seq/s)", 
+                                currentEpoch, count, totalSequences, String.format("%.1f", tput));
+                        }
+                    } catch (InterruptedException ignored) {}
+                });
+                heartbeat.setDaemon(true);
+                heartbeat.start();
+
+                pool.submit(() -> 
+                    trainingBatch.parallelStream().forEach(pair -> {
                         double loss = model.train(pair.input(), pair.target(), LEARNING_RATE);
-                        long endStep = System.nanoTime();
-                        
                         totalLoss.add(loss);
                         
                         int count = processed.incrementAndGet();
-                        if (count <= 100 && count % 10 == 0) {
-                            logger.info("Avg Step Time (last 10): {}ms", (endStep - startStep) / 1_000_000);
-                        }
-                        if (count % 1000 == 0) {
-                            long elapsed = System.currentTimeMillis() - epochStart;
-                            logger.info("Epoch {}: Processed {}/{} ({}s elapsed)", currentEpoch, count, tSeq, elapsed / 1000);
-                        }
                         if (count % 10000 == 0) {
                             try {
-                                synchronized(model) {
-                                    model.save(modelPath.toString());
-                                }
+                                synchronized(model) { model.save(modelPath.toString()); }
                                 logger.info("Checkpoint saved at {} sequences", count);
-                            } catch (IOException e) {
-                                logger.error("Failed to save checkpoint", e);
-                            }
+                            } catch (IOException e) { logger.error("Save failed", e); }
                         }
                     })
                 ).get();
 
-                long end = System.currentTimeMillis();
+                long epochEnd = System.currentTimeMillis();
                 double avgLoss = totalLoss.doubleValue() / totalSequences;
-                logger.info("Epoch {} Complete - Avg Loss: {} - Time: {}s", 
-                    epoch, String.format("%.4f", avgLoss), (end - start) / 1000);
+                logger.info("Epoch {} Complete. Avg Loss: {}. Time: {}s", 
+                    epoch, String.format("%.4f", avgLoss), (epochEnd - epochStart) / 1000);
                 
-                logger.info("Sample: [{}]", generator.generate("The ", 100));
                 model.save(modelPath.toString());
+                
+                // Generate sample every 5 epochs
+                if (epoch % 5 == 0) {
+                    TextGenerator gen = new TextGenerator(model, tokenizer, BLOCK_SIZE);
+                    logger.info("Sample (Epoch {}): [{}]", epoch, gen.generate("The ", 50));
+                }
             }
         } catch (Exception e) {
             logger.error("Training interrupted", e);
-            Thread.currentThread().interrupt();
         } finally {
-            customThreadPool.shutdown();
+            pool.shutdown();
         }
     }
 }

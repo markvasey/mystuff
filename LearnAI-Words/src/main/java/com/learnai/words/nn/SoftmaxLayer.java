@@ -24,7 +24,9 @@ public class SoftmaxLayer implements Layer {
             }
 
             for (int j = 0; j < input.getCols(); j++) {
-                output.set(i, j, output.get(i, j) / sum);
+                double prob = output.get(i, j) / sum;
+                // Clip to avoid exactly 0.0 or 1.0 which causes NaNs in log/gradients
+                output.set(i, j, Math.clamp(prob, 1e-15, 1.0 - 1e-15));
             }
         }
         return new ForwardResult(output, output);

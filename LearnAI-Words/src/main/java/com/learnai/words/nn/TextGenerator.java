@@ -1,45 +1,57 @@
 package com.learnai.words.nn;
 
 import com.learnai.words.math.Matrix;
-import com.learnai.words.tokenizer.CharacterTokenizer;
+import com.learnai.words.tokenizer.BPETokenizer;
 import java.util.Random;
 
 public class TextGenerator {
     private final LanguageModel model;
-    private final CharacterTokenizer tokenizer;
+    private final BPETokenizer tokenizer;
     private final int blockSize;
+    private final Random random = new Random();
 
-    public TextGenerator(LanguageModel model, CharacterTokenizer tokenizer, int blockSize) {
+    public TextGenerator(LanguageModel model, BPETokenizer tokenizer, int blockSize) {
         this.model = model;
         this.tokenizer = tokenizer;
         this.blockSize = blockSize;
     }
 
-    public String generate(String prompt, int length) {
-        StringBuilder sb = new StringBuilder(prompt);
-        Random rand = new Random();
-
-        for (int i = 0; i < length; i++) {
-            String current = sb.length() > blockSize ? 
-                sb.substring(sb.length() - blockSize) : sb.toString();
-            int[] ids = tokenizer.encodeString(current);
-            
-            Matrix probs = model.predict(ids);
-            int seqLen = ids.length;
-            
-            int nextId = sampleFromDistribution(probs, seqLen - 1, rand);
-            sb.append(tokenizer.decode(nextId));
+    public String generate(String prompt, int numTokens) {
+        if (tokenizer == null) return "[Generator uninitialized]";
+        
+        int[] ids = tokenizer.encode(prompt);
+        int[] currentIds = new int[blockSize];
+        
+        // Pad or truncate prompt to fit block size
+        if (ids.length >= blockSize) {
+            System.arraycopy(ids, ids.length - blockSize, currentIds, 0, blockSize);
+        } else {
+            System.arraycopy(ids, 0, currentIds, blockSize - ids.length, ids.length);
         }
-        return sb.toString();
+
+        StringBuilder result = new StringBuilder(prompt);
+        for (int i = 0; i < numTokens; i++) {
+            Matrix probs = model.predict(currentIds);
+            int nextId = sample(probs);
+            
+            result.append(tokenizer.decode(new int[]{nextId}));
+            
+            // Shift window
+            System.arraycopy(currentIds, 1, currentIds, 0, blockSize - 1);
+            currentIds[blockSize - 1] = nextId;
+        }
+
+        return result.toString();
     }
 
-    private int sampleFromDistribution(Matrix probs, int row, Random rand) {
-        double r = rand.nextDouble();
-        double cumulative = 0;
-        for (int j = 0; j < probs.getCols(); j++) {
-            cumulative += probs.get(row, j);
+    private int sample(Matrix probs) {
+        int cols = probs.getCols();
+        double r = random.nextDouble();
+        double cumulative = 0.0;
+        for (int j = 0; j < cols; j++) {
+            cumulative += probs.get(probs.getRows() - 1, j);
             if (r <= cumulative) return j;
         }
-        return probs.getCols() - 1;
+        return cols - 1;
     }
 }

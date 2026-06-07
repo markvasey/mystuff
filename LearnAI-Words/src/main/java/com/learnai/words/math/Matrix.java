@@ -1,8 +1,11 @@
 package com.learnai.words.math;
 
 import java.util.concurrent.ThreadLocalRandom;
+import jdk.incubator.vector.DoubleVector;
+import jdk.incubator.vector.VectorSpecies;
 
 public class Matrix {
+    private static final VectorSpecies<Double> SPECIES = DoubleVector.SPECIES_PREFERRED;
     private final int rows;
     private final int cols;
     private final double[] data;
@@ -15,10 +18,11 @@ public class Matrix {
 
     public static Matrix random(int rows, int cols) {
         Matrix m = new Matrix(rows, cols);
-        double variance = Math.sqrt(2.0 / (rows + cols));
+        // Ultra-conservative initialization for deep networks
+        double scale = 0.01;
         ThreadLocalRandom r = ThreadLocalRandom.current();
         for (int i = 0; i < m.data.length; i++) {
-            m.data[i] = r.nextGaussian() * variance;
+            m.data[i] = r.nextGaussian() * scale;
         }
         return m;
     }
@@ -26,18 +30,10 @@ public class Matrix {
     public int getRows() { return rows; }
     public int getCols() { return cols; }
     public double[] getData() { return data; }
+    public double get(int r, int c) { return data[r * cols + c]; }
+    public void set(int r, int c, double val) { data[r * cols + c] = val; }
 
-    public double get(int r, int c) {
-        return data[r * cols + c];
-    }
-
-    public void set(int r, int c, double val) {
-        data[r * cols + c] = val;
-    }
-
-    public Matrix multiply(Matrix other) {
-        return multiply(other, false, false);
-    }
+    public Matrix multiply(Matrix other) { return multiply(other, false, false); }
 
     public Matrix multiply(Matrix other, boolean transThis, boolean transOther) {
         int leftRows = transThis ? this.cols : this.rows;
@@ -45,9 +41,7 @@ public class Matrix {
         int rightRows = transOther ? other.cols : other.rows;
         int rightCols = transOther ? other.rows : other.cols;
 
-        if (leftCols != rightRows) {
-            throw new IllegalArgumentException("Incompatible dimensions: " + leftCols + " != " + rightRows);
-        }
+        if (leftCols != rightRows) throw new IllegalArgumentException("Dim mismatch: " + leftCols + " != " + rightRows);
 
         Matrix res = new Matrix(leftRows, rightCols);
         double[] rData = res.data;
@@ -95,71 +89,84 @@ public class Matrix {
         return res;
     }
 
-    public Matrix add(Matrix other) {
-        if (this.cols != other.cols) throw new IllegalArgumentException("Cols mismatch");
-        Matrix result = new Matrix(rows, cols);
-        double[] r = result.data;
-        double[] a = this.data;
-        double[] b = other.data;
-        if (other.rows == 1) {
-            for (int i = 0; i < rows; i++) {
-                int off = i * cols;
-                for (int j = 0; j < cols; j++) r[off + j] = a[off + j] + b[j];
-            }
-        } else if (this.rows == other.rows) {
-            for (int i = 0; i < a.length; i++) r[i] = a[i] + b[i];
-        } else {
-            throw new IllegalArgumentException("Rows mismatch");
-        }
-        return result;
-    }
-
+    /** SIMD Vectorized Add In-Place with fixed broadcasting index */
     public void addInPlace(Matrix other) {
         double[] a = this.data;
         double[] b = other.data;
-        if (other.rows == 1) {
+        if (other.rows == 1 && this.rows > 1) { // Broadcasting
             for (int i = 0; i < rows; i++) {
                 int off = i * cols;
-                for (int j = 0; j < cols; j++) a[off + j] += b[j];
+                int j = 0;
+                for (; j < SPECIES.loopBound(cols); j += SPECIES.length()) {
+                    var va = DoubleVector.fromArray(SPECIES, a, off + j);
+                    var vb = DoubleVector.fromArray(SPECIES, b, j);
+                    va.add(vb).intoArray(a, off + j);
+                }
+                for (; j < cols; j++) a[off + j] += b[j];
             }
         } else {
-            for (int i = 0; i < a.length; i++) a[i] += b[i];
+            int i = 0;
+            for (; i < SPECIES.loopBound(a.length); i += SPECIES.length()) {
+                var va = DoubleVector.fromArray(SPECIES, a, i);
+                var vb = DoubleVector.fromArray(SPECIES, b, i);
+                va.add(vb).intoArray(a, i);
+            }
+            for (; i < a.length; i++) a[i] += b[i];
         }
     }
 
+    /** SIMD Vectorized Subtract In-Place */
     public void subtractInPlace(Matrix other) {
         double[] a = this.data;
         double[] b = other.data;
-        for (int i = 0; i < a.length; i++) a[i] -= b[i];
+        int i = 0;
+        for (; i < SPECIES.loopBound(a.length); i += SPECIES.length()) {
+            var va = DoubleVector.fromArray(SPECIES, a, i);
+            var vb = DoubleVector.fromArray(SPECIES, b, i);
+            va.sub(vb).intoArray(a, i);
+        }
+        for (; i < a.length; i++) a[i] -= b[i];
     }
 
-    public Matrix transpose() {
-        Matrix result = new Matrix(cols, rows);
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                result.set(j, i, this.get(i, j));
-            }
-        }
-        return result;
+    public Matrix add(Matrix other) {
+        Matrix res = new Matrix(rows, cols);
+        System.arraycopy(this.data, 0, res.data, 0, data.length);
+        res.addInPlace(other);
+        return res;
     }
 
     public Matrix subtract(Matrix other) {
-        if (this.rows != other.rows || this.cols != other.cols) throw new IllegalArgumentException("Dim mismatch");
         Matrix res = new Matrix(rows, cols);
-        for (int i = 0; i < data.length; i++) res.data[i] = this.data[i] - other.data[i];
+        System.arraycopy(this.data, 0, res.data, 0, data.length);
+        res.subtractInPlace(other);
         return res;
     }
 
     public Matrix multiplyElementWise(Matrix other) {
-        if (this.rows != other.rows || this.cols != other.cols) throw new IllegalArgumentException("Dim mismatch");
         Matrix res = new Matrix(rows, cols);
-        for (int i = 0; i < data.length; i++) res.data[i] = this.data[i] * other.data[i];
+        double[] a = this.data;
+        double[] b = other.data;
+        double[] r = res.data;
+        int i = 0;
+        for (; i < SPECIES.loopBound(a.length); i += SPECIES.length()) {
+            var va = DoubleVector.fromArray(SPECIES, a, i);
+            var vb = DoubleVector.fromArray(SPECIES, b, i);
+            va.mul(vb).intoArray(r, i);
+        }
+        for (; i < a.length; i++) r[i] = a[i] * b[i];
         return res;
     }
 
     public Matrix square() {
         Matrix res = new Matrix(rows, cols);
-        for (int i = 0; i < data.length; i++) res.data[i] = this.data[i] * this.data[i];
+        double[] a = this.data;
+        double[] r = res.data;
+        int i = 0;
+        for (; i < SPECIES.loopBound(a.length); i += SPECIES.length()) {
+            var va = DoubleVector.fromArray(SPECIES, a, i);
+            va.mul(va).intoArray(r, i);
+        }
+        for (; i < a.length; i++) r[i] = a[i] * a[i];
         return res;
     }
 
@@ -171,50 +178,54 @@ public class Matrix {
 
     public Matrix rowMean() {
         Matrix res = new Matrix(rows, 1);
-        double[] rData = res.data;
-        double[] mData = this.data;
         for (int i = 0; i < rows; i++) {
             double sum = 0;
             int off = i * cols;
-            for (int j = 0; j < cols; j++) sum += mData[off + j];
-            rData[i] = sum / cols;
+            for (int j = 0; j < cols; j++) sum += data[off + j];
+            res.data[i] = sum / cols;
         }
         return res;
     }
 
     public Matrix rowVariance(Matrix mean) {
         Matrix res = new Matrix(rows, 1);
-        double[] rData = res.data;
-        double[] mData = this.data;
-        double[] meanData = mean.data;
         for (int i = 0; i < rows; i++) {
             double sumSq = 0;
-            double m = meanData[i];
+            double m = mean.data[i];
             int off = i * cols;
             for (int j = 0; j < cols; j++) {
-                double diff = mData[off + j] - m;
+                double diff = data[off + j] - m;
                 sumSq += diff * diff;
             }
-            rData[i] = sumSq / cols;
+            res.data[i] = sumSq / cols;
+        }
+        return res;
+    }
+
+    public Matrix transpose() {
+        Matrix res = new Matrix(cols, rows);
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) res.data[j * rows + i] = data[i * cols + j];
         }
         return res;
     }
 
     public void save(java.io.DataOutputStream dos) throws java.io.IOException {
-        dos.writeInt(rows);
-        dos.writeInt(cols);
-        for (double d : data) {
-            dos.writeDouble(d);
-        }
+        dos.writeInt(rows); dos.writeInt(cols);
+        for (double d : data) dos.writeDouble(d);
     }
 
     public static Matrix load(java.io.DataInputStream dis) throws java.io.IOException {
-        int r = dis.readInt();
-        int c = dis.readInt();
+        int r = dis.readInt(); int c = dis.readInt();
         Matrix m = new Matrix(r, c);
-        for (int i = 0; i < m.data.length; i++) {
-            m.data[i] = dis.readDouble();
-        }
+        for (int i = 0; i < m.data.length; i++) m.data[i] = dis.readDouble();
         return m;
+    }
+
+    public boolean hasInvalidValues() {
+        for (double d : data) {
+            if (Double.isNaN(d) || Double.isInfinite(d)) return true;
+        }
+        return false;
     }
 }

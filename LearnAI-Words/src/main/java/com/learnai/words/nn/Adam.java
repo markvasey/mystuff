@@ -20,23 +20,27 @@ public class Adam {
 
     public synchronized void update(Matrix weights, Matrix gradient, double lr) {
         t++;
-        double[] wData = weights.getData();
-        double[] gData = gradient.getData();
+        double[] w = weights.getData();
+        double[] g = gradient.getData();
         double[] mData = m.getData();
         double[] vData = v.getData();
 
-        double biasCorr1 = 1.0 - Math.pow(beta1, t);
-        double biasCorr2 = 1.0 - Math.pow(beta2, t);
+        double bc1 = 1.0 - Math.pow(beta1, t);
+        double bc2 = 1.0 - Math.pow(beta2, t);
 
-        for (int i = 0; i < wData.length; i++) {
-            double g = gData[i];
-            mData[i] = beta1 * mData[i] + (1.0 - beta1) * g;
-            vData[i] = beta2 * vData[i] + (1.0 - beta2) * g * g;
+        // This loop is the heart of the optimizer
+        for (int i = 0; i < w.length; i++) {
+            double grad = g[i];
+            // Update moments
+            mData[i] = beta1 * mData[i] + (1.0 - beta1) * grad;
+            vData[i] = beta2 * vData[i] + (1.0 - beta2) * grad * grad;
             
-            double mHat = mData[i] / biasCorr1;
-            double vHat = vData[i] / biasCorr2;
+            // Compute bias-corrected moments
+            double mHat = mData[i] / bc1;
+            double vHat = vData[i] / bc2;
             
-            wData[i] -= lr * mHat / (Math.sqrt(vHat) + eps);
+            // Apply update to weights
+            w[i] -= lr * mHat / (Math.sqrt(vHat) + eps);
         }
     }
 

@@ -1,21 +1,23 @@
 package com.learnai.words.nn;
 
-import com.learnai.words.tokenizer.CharacterTokenizer;
+import com.learnai.words.tokenizer.BPETokenizer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class GenerationTest {
     private LanguageModel model;
-    private CharacterTokenizer tokenizer;
+    private BPETokenizer tokenizer;
     private TextGenerator generator;
     private static final int BLOCK_SIZE = 32;
 
     @BeforeEach
     public void setup() {
-        // Use a small corpus to initialize the tokenizer
-        String corpus = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?'\"-";
-        tokenizer = new CharacterTokenizer(corpus);
+        // Use a small corpus to initialize the BPE tokenizer
+        String corpus = "The artist is in my younger and I am by birth a To Sherlock Holmes she "
+                     + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?'\"-";
+        tokenizer = new BPETokenizer();
+        tokenizer.train(corpus, 300); 
         model = new LanguageModel(tokenizer.getVocabSize(), 64, BLOCK_SIZE);
         generator = new TextGenerator(model, tokenizer, BLOCK_SIZE);
     }

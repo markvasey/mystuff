@@ -13,7 +13,7 @@ public class DenseLayer implements Layer {
 
     public DenseLayer(int inputDim, int outputDim) {
         this.weights = Matrix.random(inputDim, outputDim);
-        this.bias = new Matrix(1, outputDim);
+        this.bias = new Matrix(1, outputDim); // new Matrix is zero-initialized
         this.weightsOpt = new Adam(inputDim, outputDim);
         this.biasOpt = new Adam(1, outputDim);
     }
@@ -27,20 +27,25 @@ public class DenseLayer implements Layer {
     @Override
     public Matrix backward(Matrix outputGradient, Object context, double learningRate) {
         Matrix lastInput = (Matrix) context;
-        // Efficient: [InputDim x SeqLen] * [SeqLen x OutputDim] -> [InputDim x OutputDim]
+        
+        // weightsGradient = lastInput^T * outputGradient
         Matrix weightsGradient = lastInput.multiply(outputGradient, true, false);
         
+        // biasGradient = sum of outputGradient along the row dimension (sequence dimension)
         Matrix biasGradient = new Matrix(1, bias.getCols());
         double[] bg = biasGradient.getData();
-        int rows = outputGradient.getRows();
-        int cols = outputGradient.getCols();
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                bg[j] += outputGradient.get(i, j);
+        double[] og = outputGradient.getData();
+        int ogRows = outputGradient.getRows();
+        int ogCols = outputGradient.getCols();
+        
+        for (int i = 0; i < ogRows; i++) {
+            int off = i * ogCols;
+            for (int j = 0; j < ogCols; j++) {
+                bg[j] += og[off + j];
             }
         }
 
-        // Efficient: [SeqLen x OutputDim] * [OutputDim x InputDim] -> [SeqLen x InputDim]
+        // inputGradient = outputGradient * weights^T
         Matrix inputGradient = outputGradient.multiply(weights, false, true);
 
         if (learningRate > 0) {
