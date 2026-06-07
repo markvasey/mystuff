@@ -62,29 +62,10 @@ public class WordsCLI {
         // Prepare training sequences efficiently
         record SequencePair(int[] input, int target) {}
         List<SequencePair> pairs = new ArrayList<>();
-        int outOfBoundsCount = 0;
-        int maxTokenSeen = 0;
         for (int i = 0; i < allTokens.length - BLOCK_SIZE - 1; i += 10) {
             int[] seq = new int[BLOCK_SIZE];
             System.arraycopy(allTokens, i, seq, 0, BLOCK_SIZE);
-            int target = allTokens[i + BLOCK_SIZE];
-            
-            boolean valid = true;
-            for (int t : seq) {
-                if (t >= tokenizer.getVocabSize()) { valid = false; maxTokenSeen = Math.max(maxTokenSeen, t); }
-            }
-            if (target >= tokenizer.getVocabSize()) { valid = false; maxTokenSeen = Math.max(maxTokenSeen, target); }
-
-            if (valid) {
-                pairs.add(new SequencePair(seq, target));
-            } else {
-                outOfBoundsCount++;
-            }
-        }
-        
-        if (outOfBoundsCount > 0) {
-            logger.warn("Skipped {} sequences due to out-of-bounds tokens (Max token: {}, Vocab size: {})", 
-                outOfBoundsCount, maxTokenSeen, tokenizer.getVocabSize());
+            pairs.add(new SequencePair(seq, allTokens[i + BLOCK_SIZE]));
         }
         
         int totalSequences = Math.min(pairs.size(), 100000);
@@ -137,11 +118,9 @@ public class WordsCLI {
                 
                 model.save(modelPath.toString());
                 
-                // Generate sample every 5 epochs
-                if (epoch % 5 == 0) {
-                    TextGenerator gen = new TextGenerator(model, tokenizer, BLOCK_SIZE);
-                    logger.info("Sample (Epoch {}): [{}]", epoch, gen.generate("The ", 50));
-                }
+                // Generate sample every epoch
+                TextGenerator gen = new TextGenerator(model, tokenizer, BLOCK_SIZE);
+                logger.info("Sample (Epoch {}): [{}]", epoch, gen.generate("The ", 50));
             }
         } catch (Exception e) {
             logger.error("Training interrupted", e);

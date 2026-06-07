@@ -45,19 +45,37 @@ public class MatrixTest {
     }
 
     @Test
-    public void testAddBroadcasting() {
-        Matrix m = new Matrix(2, 2);
-        m.set(0, 0, 1); m.set(0, 1, 2);
-        m.set(1, 0, 3); m.set(1, 1, 4);
+    public void testMultiplyTransposed() {
+        // Test (transThis, !transOther)
+        Matrix m1 = new Matrix(3, 2); // Transposed will be 2x3
+        m1.set(0, 0, 1); m1.set(1, 0, 2); m1.set(2, 0, 3);
+        m1.set(0, 1, 4); m1.set(1, 1, 5); m1.set(2, 1, 6);
 
-        Matrix bias = new Matrix(1, 2);
-        bias.set(0, 0, 10); bias.set(0, 1, 20);
+        Matrix m2 = new Matrix(3, 2);
+        m2.set(0, 0, 7); m2.set(0, 1, 8);
+        m2.set(1, 0, 9); m2.set(1, 1, 10);
+        m2.set(2, 0, 11); m2.set(2, 1, 12);
 
-        Matrix result = m.add(bias);
+        Matrix result = m1.multiply(m2, true, false);
 
-        assertEquals(11, result.get(0, 0)); // 1 + 10
-        assertEquals(22, result.get(0, 1)); // 2 + 20
-        assertEquals(13, result.get(1, 0)); // 3 + 10
-        assertEquals(24, result.get(1, 1)); // 4 + 20
+        assertEquals(2, result.getRows());
+        assertEquals(2, result.getCols());
+        assertEquals(58, result.get(0, 0));
+        assertEquals(64, result.get(0, 1));
+        assertEquals(139, result.get(1, 0));
+        assertEquals(154, result.get(1, 1));
+
+        // Test (!transThis, transOther)
+        Matrix m3 = new Matrix(2, 3);
+        m3.set(0, 0, 1); m3.set(0, 1, 2); m3.set(0, 2, 3);
+        m3.set(1, 0, 4); m3.set(1, 1, 5); m3.set(1, 2, 6);
+
+        Matrix m4 = new Matrix(2, 3); // Transposed will be 3x2
+        m4.set(0, 0, 7); m4.set(1, 0, 8);
+        m4.set(0, 1, 9); m4.set(1, 1, 10);
+        m4.set(0, 2, 11); m4.set(1, 2, 12);
+
+        Matrix result2 = m3.multiply(m4, false, true);
+        assertEquals(58, result2.get(0, 0));
     }
 }

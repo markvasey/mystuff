@@ -54,10 +54,15 @@ public class Matrix {
                 int rOff = i * rightCols;
                 for (int k = 0; k < leftCols; k++) {
                     double val = aData[iOff + k];
+                    if (val == 0) continue;
                     int kOff = k * rightCols;
-                    for (int j = 0; j < rightCols; j++) {
-                        rData[rOff + j] += val * bData[kOff + j];
+                    int j = 0;
+                    for (; j < SPECIES.loopBound(rightCols); j += SPECIES.length()) {
+                        var vb = DoubleVector.fromArray(SPECIES, bData, kOff + j);
+                        var vr = DoubleVector.fromArray(SPECIES, rData, rOff + j);
+                        vb.broadcast(val).add(vr).intoArray(rData, rOff + j);
                     }
+                    for (; j < rightCols; j++) rData[rOff + j] += val * bData[kOff + j];
                 }
             }
         } else if (transThis && !transOther) {
@@ -66,25 +71,22 @@ public class Matrix {
                 int kOffB = k * rightCols;
                 for (int i = 0; i < leftRows; i++) {
                     double val = aData[kOffA + i];
+                    if (val == 0) continue;
                     int iOffR = i * rightCols;
-                    for (int j = 0; j < rightCols; j++) {
-                        rData[iOffR + j] += val * bData[kOffB + j];
+                    int j = 0;
+                    for (; j < SPECIES.loopBound(rightCols); j += SPECIES.length()) {
+                        var vb = DoubleVector.fromArray(SPECIES, bData, kOffB + j);
+                        var vr = DoubleVector.fromArray(SPECIES, rData, iOffR + j);
+                        vb.broadcast(val).add(vr).intoArray(rData, iOffR + j);
                     }
+                    for (; j < rightCols; j++) rData[iOffR + j] += val * bData[kOffB + j];
                 }
             }
         } else if (!transThis && transOther) {
-            for (int i = 0; i < leftRows; i++) {
-                int iOff = i * leftCols;
-                int rOff = i * rightCols;
-                for (int j = 0; j < rightCols; j++) {
-                    int jOff = j * leftCols;
-                    double sum = 0;
-                    for (int k = 0; k < leftCols; k++) {
-                        sum += aData[iOff + k] * bData[jOff + k];
-                    }
-                    rData[rOff + j] = sum;
-                }
-            }
+            // For (!transThis && transOther), it's more efficient to transpose 'other' once
+            // and use the standard vectorized path, rather than using the dot-product path.
+            Matrix otherT = other.transpose();
+            return this.multiply(otherT, false, false);
         }
         return res;
     }

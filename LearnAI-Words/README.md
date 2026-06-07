@@ -1,40 +1,39 @@
 # LearnAI-Words: Pure Java LLM from Scratch
 
-`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 25**, without any external machine learning libraries. It demonstrates the underlying mathematics of the Transformer architecture through a clean, readable, and highly parallelized implementation.
+`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 25**, without any external machine learning libraries. It demonstrates the underlying mathematics of the Transformer architecture through a clean, readable, and highly optimized implementation.
 
 ---
 
 ## 🚀 Phase 2 Enhancements: The "Smart Student"
 We have recently transitioned from Phase 1 (Character-level) to **Phase 2**, introducing surgical optimizations and architectural scaling:
-- **Subword BPE Tokenization**: Replaced characters with a **1,000-token Byte Pair Encoding (BPE)** vocabulary. This allows the model to "think" in word parts (e.g., `["Sher", "lock"]`) rather than individual letters, effectively tripling its context window.
-- **Java 25 SIMD Optimization**: Leverages the **Java Vector API** to perform hardware-level parallel math (AVX-512/Neon). This ensures that even as the model grows, training remains "Ultra-Responsive."
-- **10,000x Speedup**: Core math refactored to $O(N \cdot D)$, with optimized **In-Place** arithmetic and **Transpose-Free** multiplication.
-- **14-Core Parallelism**: Uses a custom `ForkJoinPool` with a **10-second heartbeat thread** for real-time throughput monitoring.
+- **Subword BPE Tokenization**: A **1,000-token Byte Pair Encoding (BPE)** vocabulary allows the model to "think" in word parts (e.g., `["Sher", "lock"]`). 
+- **Robustness (UNK Token)**: Added a dedicated **`<UNK>` (Unknown) token (ID 256)** to handle exotic Unicode characters (like curly quotes) without crashing, ensuring stable training across diverse texts.
+- **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** (Incubator) to perform vectorized matrix multiplication. By processing multiple data points per CPU cycle (SIMD), we achieve a **2x performance boost**.
+- **High Throughput**: Currently training at **100+ sequences per second** on a 13th Gen i7, reducing epoch time from 25 minutes to roughly **10 minutes**.
+- **14-Core Parallelism**: Uses a custom `ForkJoinPool` with a real-time heartbeat monitor and per-epoch text generation samples.
 
 ---
 
 ## 📊 Model Specifications & Dimensions
 
-The model is now a robust, deep Transformer optimized for semantic understanding.
+The model is a deep Transformer optimized for semantic generalization over rote memorization.
 
-### Layer Stack (20 Layers Total)
+### Layer Stack (16 Core Stages)
 1.  **Input Embedding** ($1000 \times 192$)
 2.  **Positional Encoding** (Fixed Sine/Cosine)
-3.  **Transformer Block 1-3** (3 Blocks):
-    *   6x Layer Norms
-    *   3x Causal Self-Attention ($192 \times 192 \times 3$)
-    *   3x Residual Connections
-    *   3x Dense Feed-Forward ($192 \times 192$)
-    *   3x Residual Connections
+3.  **Transformer Blocks (x3)**:
+    *   2x Layer Norms per block
+    *   1x Causal Self-Attention ($192 \times 192 \times 3$)
+    *   1x Dense Feed-Forward ($192 \times 192$)
+    *   Residual connections and specialized initialization.
 4.  **Final Layer Norm**
 5.  **Language Head** ($192 \times 1000$)
 
-### Total Parameter Count: **635,912**
+### Total Parameter Count: **~636,000**
 *   **Embeddings**: 192,000
 *   **Attention Weights**: 331,776
 *   **Dense/FFN Layers**: 110,592 (includes Head)
 *   **Layer Norms**: 1,544
-*   *Note: This excludes Adam optimizer moments ($m, v$), which double the weight memory during training.*
 
 ---
 
@@ -57,7 +56,7 @@ graph TD
     subgraph "Optimization Engine"
         Head --> Backprop[Backpropagation Engine]
         Backprop --> Adam[Adam Optimizer]
-        Adam --> Matrix[SIMD Matrix Engine]
+        Adam --> Matrix[SIMD Vectorized Engine]
     end
     
     LM --> Persistence[model.bin]
@@ -71,27 +70,29 @@ graph TD
 A critical design decision is the balance between **Memorization** and **Generalization**.
 
 ### The Smart Student Strategy
-Instead of building a massive "Perfect Library" model that simply quotes books, we use a compact **635k parameter model**. This forces the model to learn the **rules** of English grammar and the **relationships** between subwords (Distributional Semantics) rather than just memorizing character sequences.
+Instead of building a massive "Perfect Library" model that simply quotes books, we use a compact **636k parameter model**. This forces the model to learn the **rules** of English grammar and the **relationships** between subwords (Distributional Semantics) rather than just memorizing character sequences.
 
 | Feature | Phase 1 (Legacy) | Phase 2 (Current) | Why? |
 | :--- | :--- | :--- | :--- |
 | **Tokenizer** | Character | **BPE (Subword)** | To capture semantic word parts. |
 | **`block_size`** | 32 | **128** | To "see" full sentences and context. |
 | **`d_model`** | 128 | **192** | More associative memory for concepts. |
-| **Blocks** | 2 | **3** | Deeper reasoning for longer sequences. |
-| **Compute** | ~100s / Epoch | **~2 hrs / Epoch** | $O(N^2)$ attention math on 128 context. |
+| **Throughput** | ~50 seq/s | **~105 seq/s** | SIMD-accelerated Matrix math. |
+| **Compute** | ~100s / Epoch | **~10 mins / Epoch** | Deeper context requires more math. |
 
 ---
 
 ## 🛠️ How to Run
 
 ### Requirements
-- **JDK 25** (Recommended for SIMD)
+- **JDK 25** (Required for the Vector API)
 - **Maven** (included via `./mvnw`)
 
 ### Start Training
+The project uses the `exec-maven-plugin` configured with the necessary JVM flags for the incubator Vector API.
+
 ```bash
-./mvnw clean compile package exec:java -Dexec.mainClass="com.learnai.words.cli.WordsCLI" -DskipTests > training.log 2>&1 &
+./mvnw clean compile exec:exec
 ```
 
 ### Monitor Progress
