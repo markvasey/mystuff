@@ -141,6 +141,35 @@ For every sequence processed across the 14 parallel threads:
 
 ---
 
+## 🎓 Philosophical Goal: The "Smart Student" vs. "The Perfect Library"
+
+A critical design decision in `LearnAI-Words` is the balance between **Memorization** and **Generalization**.
+
+### 1. The Perfect Library (Memorization)
+*   **The Goal:** Encode every character of the training set losslessly.
+*   **The Math:** Requires ~2 parameters per training character. For our 1.2M character dataset, this would require a **~2.5M parameter model**.
+*   **The Risk:** The model becomes a "lookup table." It can quote books verbatim but cannot form new thoughts or understand the rules of English.
+
+### 2. The Smart Student (Generalization)
+*   **The Goal:** Master English grammar, structure, and semantic meaning.
+*   **The Strategy:** Use a smaller parameter count (160k - 500k) to force the model to learn **rules** rather than **data**. This is "Distributional Semantics"—deriving meaning by analyzing the relationships between words.
+*   **The Current Bottleneck:** Our current `block_size` of 32 limits the model to a 5-word "memory." It can learn to spell, but it cannot yet grasp the meaning of a full sentence.
+
+---
+
+## 🗺️ Roadmap: The Path to Semantic Meaning
+
+We are currently in **Phase 1**. Once the current 50-epoch run is complete, we will pivot to Phase 2 to transition from a "Spelling Bee Champion" to a "Smart Student."
+
+| Feature | Phase 1 (Current) | Phase 2 (Target) | Why? |
+| :--- | :--- | :--- | :--- |
+| **`block_size`** | 32 | **128** | To "see" full sentences and understand context. |
+| **`d_model`** | 128 | **192** | To provide more associative memory for concepts. |
+| **Blocks** | 2 | **3** | To add a deeper layer of "reasoning" for long sequences. |
+| **Compute Cost** | ~100s / Epoch | ~7-8 hrs / Epoch | Attention math scales quadratically ($N^2$) with context. |
+
+---
+
 ## 🛠️ How to Run
 
 ### Requirements
