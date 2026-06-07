@@ -20,11 +20,11 @@ import java.util.stream.Collectors;
 
 public class WordsCLI {
     private static final Logger logger = LoggerFactory.getLogger(WordsCLI.class);
-    private static final int BLOCK_SIZE = 128;
+    private static final int BLOCK_SIZE = 32;
     private static final int D_MODEL = 64;
     private static final double LEARNING_RATE = 0.001;
     private static final int EPOCHS = 5;
-    private static final int THREADS = 14; // Leave 2 CPUs free
+    private static final int THREADS = 1; // Single-threaded test
 
     public static void main(String[] args) throws IOException {
         logger.info("--- LearnAI-Words LLM Training (Ultra-Responsive) ---");

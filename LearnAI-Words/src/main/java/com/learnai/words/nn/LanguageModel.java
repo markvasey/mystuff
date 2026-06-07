@@ -66,17 +66,19 @@ public class LanguageModel {
     }
 
     public double train(int[] tokenIds, int targetId, double learningRate) {
-        // Forward (Thread-safe)
+        long start = System.nanoTime();
+        // Forward
         ModelForwardResult fwd = forward(tokenIds);
-        Matrix probs = fwd.finalProbs;
+        long fwdEnd = System.nanoTime();
         
+        Matrix probs = fwd.finalProbs;
         int seqLen = tokenIds.length;
         Matrix target = new Matrix(seqLen, probs.getCols());
         target.set(seqLen - 1, targetId, 1.0);
 
         double loss = -Math.log(Math.max(probs.get(seqLen - 1, targetId), 1e-10));
 
-        // Backward (Concurrent parts are thread-safe, weight updates are synchronized)
+        // Backward
         Matrix fullGradient = softmax.backward(target, fwd.finalProbs, learningRate);
         
         Matrix lastTokenGradient = new Matrix(seqLen, fullGradient.getCols());
@@ -85,11 +87,20 @@ public class LanguageModel {
         }
 
         Matrix gradient = lastTokenGradient;
+        long backStart = System.nanoTime();
         for (int i = layers.size() - 1; i >= 0; i--) {
+            long lStart = System.nanoTime();
             gradient = layers.get(i).backward(gradient, fwd.layerContexts.get(i), learningRate);
+            long lEnd = System.nanoTime();
+            // System.out.println("Layer " + i + " back: " + (lEnd - lStart)/1_000_000 + "ms");
         }
         positional.backward(gradient, fwd.positionalContext, learningRate);
         embedding.backward(gradient, fwd.embeddingContext, learningRate);
+        long end = System.nanoTime();
+
+        if (Math.random() < 0.01) {
+            System.out.println("Step Time: " + (end - start)/1_000_000 + "ms (Fwd: " + (fwdEnd - start)/1_000_000 + "ms)");
+        }
 
         return loss;
     }
