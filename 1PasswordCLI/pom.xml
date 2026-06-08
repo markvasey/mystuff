@@ -14,7 +14,7 @@
     <name>1PasswordCLI</name>
     <description>1Password CLI Wrapper</description>
     <properties>
-        <java.version>23</java.version>
+        <java.version>26</java.version>
     </properties>
     <dependencies>
         <dependency>

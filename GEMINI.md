@@ -4,8 +4,8 @@
 - **Data Integrity:** Never attempt to write to, update, or move files in any other part of the Dropbox folder (e.g., `Data/`, `Drawings/`, etc.) under any circumstances.
 
 ## Java Environment
-- **JDK Version:** OpenJDK 23.0.1
-- **JDK Path:** `/home/markvasey/.jdks/openjdk-23.0.1`
+- **JDK Version:** OpenJDK 26.0.1 (Temurin)
+- **JDK Path:** `/home/markvasey/.sdkman/candidates/java/26.0.1-tem`
 - Always ensure `JAVA_HOME` is set to this path and included in the `PATH` when running build or test commands.
 
 ## Build Tools

@@ -35,7 +35,7 @@ public class WebConfig implements WebMvcConfigurer {
 ```
 
 ## Java Environment
-- **JAVA_HOME:** `/home/markvasey/.jdks/openjdk-23.0.1`
+- **JAVA_HOME:** `/home/markvasey/.sdkman/candidates/java/26.0.1-tem`
 - **Maven:** Use `./mvnw` whenever available.
 
 ## Workflow

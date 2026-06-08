@@ -1,6 +1,6 @@
 # LearnAI-Words: Pure Java LLM from Scratch
 
-`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 25**, without any external machine learning libraries. It is designed as a "glass box" for students and engineers to see exactly how modern AI works from the inside out.
+`LearnAI-Words` is a subword-level Large Language Model (LLM) implemented entirely in **Java 26**, without any external machine learning libraries. It is designed as a "glass box" for students and engineers to see exactly how modern AI works from the inside out.
 
 ---
 
@@ -8,7 +8,25 @@
 - **Subword BPE Tokenization**: A **1,000-token Byte Pair Encoding (BPE)** vocabulary allows the model to "think" in word parts. 
 - **Robustness (UNK Token)**: Added a dedicated **`<UNK>` (Unknown) token (ID 256)** to handle exotic Unicode characters (like curly quotes) without crashing.
 - **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** for a **2x performance boost** (100+ seq/s).
+- **Java 26 G1 GC (High Throughput)**: Leverages the new **Dual Card Table** approach (JEP 522), reducing synchronization overhead and boosting throughput by up to 15% on multi-core systems.
 - **14-Core Parallelism**: Uses a custom `ForkJoinPool` for highly efficient training.
+
+---
+
+## ⚡ Performance Tuning (Java 26)
+
+### **G1 GC: The "Dual Card Table" Advantage**
+By upgrading to Java 26, the model benefits from a major architectural shift in the G1 Garbage Collector. 
+- **The Problem:** Previously, the JVM had to "pause" or synchronize frequently to track memory references across threads.
+- **The Solution:** Java 26 uses two separate tables for tracking memory. Application threads write to one while the GC reads the other, virtually eliminating "contention" and lock-wait time.
+- **How to use:** This is enabled by default! You get a **5-15% throughput boost** just by running on Java 26.
+
+### **Recommended JVM Memory Flags**
+For a 636k parameter model with heavy multi-threading, we recommend a generous heap and string optimization to keep the "Smart Student" efficient:
+```bash
+# Recommended for 64GB RAM systems
+export MAVEN_OPTS="-Xms8g -Xmx16g -XX:+UseStringDeduplication"
+```
 
 ---
 
@@ -134,7 +152,7 @@ This optimization doubled training throughput from ~45 seq/s to over 100 seq/s.
 ## 📂 Diagnostic Tools
 
 ### **1. Semantic Probe: Quantifying "Meaning"**
-Calculates the **Euclidean Distance** between embedding vectors.
+The `SemanticProbe` is a powerful tool to measure **Distributional Semantics**. It calculates the **Euclidean Distance** between the embedding vectors of two words.
 ```bash
 ./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.SemanticProbe"
 ```

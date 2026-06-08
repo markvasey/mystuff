@@ -54,9 +54,12 @@ public class WordsCLI {
         LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), D_MODEL, BLOCK_SIZE);
         logger.info("Vocabulary Size: {}", tokenizer.getVocabSize());
         Path modelPath = Path.of("model.bin");
+        int startEpoch = 1;
         if (Files.exists(modelPath)) {
             logger.info("Resuming from existing model...");
             model.load(modelPath.toString());
+            startEpoch = model.getCompletedEpochs() + 1;
+            logger.info("Resuming from Epoch {}", startEpoch);
         }
 
         // Prepare training sequences efficiently
@@ -74,7 +77,7 @@ public class WordsCLI {
 
         ForkJoinPool pool = new ForkJoinPool(THREADS);
         try {
-            for (int epoch = 1; epoch <= EPOCHS; epoch++) {
+            for (int epoch = startEpoch; epoch <= EPOCHS; epoch++) {
                 final DoubleAdder totalLoss = new DoubleAdder();
                 final AtomicInteger processed = new AtomicInteger(0);
                 final long epochStart = System.currentTimeMillis();
@@ -104,7 +107,10 @@ public class WordsCLI {
                         int count = processed.incrementAndGet();
                         if (count % 10000 == 0) {
                             try {
-                                synchronized(model) { model.save(modelPath.toString()); }
+                                synchronized(model) { 
+                                    model.setCompletedEpochs(currentEpoch - 1); // Partial save
+                                    model.save(modelPath.toString()); 
+                                }
                                 logger.info("Checkpoint saved at {} sequences", count);
                             } catch (IOException e) { logger.error("Save failed", e); }
                         }
@@ -116,6 +122,7 @@ public class WordsCLI {
                 logger.info("Epoch {} Complete. Avg Loss: {}. Time: {}s", 
                     epoch, String.format("%.4f", avgLoss), (epochEnd - epochStart) / 1000);
                 
+                model.setCompletedEpochs(epoch);
                 model.save(modelPath.toString());
                 
                 // Generate sample every epoch

@@ -25,4 +25,4 @@ The project includes `HelloControllerTest.java` which verifies case-insensitive 
 
 ## Configuration
 - **Port:** 8081 (defined in `src/main/resources/application.properties`)
-- **Java Version:** OpenJDK 23.0.1
+- **Java Version:** 26.0.1 (Temurin)

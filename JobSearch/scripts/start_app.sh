@@ -1,7 +1,7 @@
 #!/bin/bash
 # start_app.sh
 
-export JAVA_HOME=/home/markvasey/.jdks/openjdk-23.0.1
+export JAVA_HOME=/home/markvasey/.sdkman/candidates/java/26.0.1-tem
 export PATH=$JAVA_HOME/bin:$PATH
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"

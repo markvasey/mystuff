@@ -15,7 +15,7 @@
 	<description>UK House Price Monitor with Land Registry and EPC API enrichment</description>
 
 	<properties>
-		<java.version>23</java.version>
+		<java.version>26</java.version>
 	</properties>
 
 	<dependencies>

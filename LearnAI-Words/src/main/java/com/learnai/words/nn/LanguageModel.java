@@ -9,6 +9,7 @@ public class LanguageModel {
     private final PositionalEncoding positional;
     private final List<Layer> layers = new ArrayList<>();
     private final SoftmaxLayer softmax = new SoftmaxLayer();
+    private int completedEpochs = 0;
 
     private static class ModelForwardResult {
         public final Matrix finalProbs;
@@ -40,6 +41,9 @@ public class LanguageModel {
         layers.add(new LayerNorm(d_model));
         layers.add(new DenseLayer(d_model, vocabSize));
     }
+
+    public int getCompletedEpochs() { return completedEpochs; }
+    public void setCompletedEpochs(int n) { this.completedEpochs = n; }
 
     public Matrix predict(int[] tokenIds) {
         return forward(tokenIds).finalProbs;
@@ -94,6 +98,7 @@ public class LanguageModel {
     
     public void save(String path) throws java.io.IOException {
         try (java.io.DataOutputStream dos = new java.io.DataOutputStream(new java.io.FileOutputStream(path))) {
+            dos.writeInt(completedEpochs);
             embedding.save(dos);
             positional.save(dos);
             dos.writeInt(layers.size());
@@ -103,6 +108,7 @@ public class LanguageModel {
 
     public void load(String path) throws java.io.IOException {
         try (java.io.DataInputStream dis = new java.io.DataInputStream(new java.io.FileInputStream(path))) {
+            this.completedEpochs = dis.readInt();
             embedding.load(dis);
             positional.load(dis);
             int layerCount = dis.readInt();
