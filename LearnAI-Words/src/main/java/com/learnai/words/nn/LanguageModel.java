@@ -79,6 +79,14 @@ public class LanguageModel {
 
         Matrix gradient = softmax.backward(target, fwd.finalProbs, learningRate);
 
+        // Zero out gradients for intermediate positions i < seqLen - 1
+        for (int i = 0; i < seqLen - 1; i++) {
+            int off = i * vocabSize;
+            for (int j = 0; j < vocabSize; j++) {
+                gradient.getData()[off + j] = 0.0;
+            }
+        }
+
         // Global Gradient Clipping (Clip norm to 1.0)
         double norm = Math.sqrt(gradient.square().rowMean().rowMean().get(0, 0));
         if (norm > 1.0) {
