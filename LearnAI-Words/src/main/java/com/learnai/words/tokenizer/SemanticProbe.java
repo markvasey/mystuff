@@ -25,7 +25,7 @@ public class SemanticProbe {
         embField.setAccessible(true);
         EmbeddingLayer embeddingLayer = (EmbeddingLayer) embField.get(model);
         
-        Field weightsField = EmbeddingLayer.class.getDeclaredField("weights");
+        Field weightsField = EmbeddingLayer.class.getDeclaredField("embeddings");
         weightsField.setAccessible(true);
         Matrix weights = (Matrix) weightsField.get(embeddingLayer);
 

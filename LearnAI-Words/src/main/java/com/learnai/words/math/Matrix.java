@@ -57,10 +57,11 @@ public class Matrix {
                     if (val == 0) continue;
                     int kOff = k * rightCols;
                     int j = 0;
+                    var vVal = DoubleVector.broadcast(SPECIES, val);
                     for (; j < SPECIES.loopBound(rightCols); j += SPECIES.length()) {
                         var vb = DoubleVector.fromArray(SPECIES, bData, kOff + j);
                         var vr = DoubleVector.fromArray(SPECIES, rData, rOff + j);
-                        vb.broadcast(val).add(vr).intoArray(rData, rOff + j);
+                        vb.mul(vVal).add(vr).intoArray(rData, rOff + j);
                     }
                     for (; j < rightCols; j++) rData[rOff + j] += val * bData[kOff + j];
                 }
@@ -74,10 +75,11 @@ public class Matrix {
                     if (val == 0) continue;
                     int iOffR = i * rightCols;
                     int j = 0;
+                    var vVal = DoubleVector.broadcast(SPECIES, val);
                     for (; j < SPECIES.loopBound(rightCols); j += SPECIES.length()) {
                         var vb = DoubleVector.fromArray(SPECIES, bData, kOffB + j);
                         var vr = DoubleVector.fromArray(SPECIES, rData, iOffR + j);
-                        vb.broadcast(val).add(vr).intoArray(rData, iOffR + j);
+                        vb.mul(vVal).add(vr).intoArray(rData, iOffR + j);
                     }
                     for (; j < rightCols; j++) rData[iOffR + j] += val * bData[kOffB + j];
                 }
