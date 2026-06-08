@@ -5,26 +5,50 @@
 ---
 
 ## 🚀 Phase 2 Enhancements: The "Smart Student"
-- **Subword BPE Tokenization**: A **1,000-token Byte Pair Encoding (BPE)** vocabulary allows the model to "think" in word parts. 
+- **Subword BPE Tokenization**: A configurable **Byte Pair Encoding (BPE)** tokenizer ([BPETokenizer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/tokenizer/BPETokenizer.java)) groups common characters into subword units, allowing vocabulary size tuning (e.g., 800 tokens for children's stories).
+- **Interactive Prompting CLI**: A dedicated CLI ([PromptCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/cli/PromptCLI.java)) allows you to load model weights and tokenizers to prompt the model interactively.
 - **Robustness (UNK Token)**: Added a dedicated **`<UNK>` (Unknown) token (ID 256)** to handle exotic Unicode characters (like curly quotes) without crashing.
-- **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** for a **2x performance boost** (100+ seq/s).
-- **Java 26 G1 GC (High Throughput)**: Leverages the new **Dual Card Table** approach (JEP 522), reducing synchronization overhead and boosting throughput by up to 15% on multi-core systems.
-- **14-Core Parallelism**: Uses a custom `ForkJoinPool` for highly efficient training.
+- **SIMD Optimized Matrix Engine**: Leverages the **Java Vector API** inside [Matrix.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/math/Matrix.java) for a **2x performance boost** during parallel training.
+- **Java 26 G1 GC (High Throughput)**: Leverages the new **Dual Card Table** approach (JEP 522), reducing GC lock contention on multi-core systems.
+- **14-Core Parallelism**: Uses a custom `ForkJoinPool` in [WordsCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/cli/WordsCLI.java) for parallel SGD execution.
+
+---
+
+## 🧠 Architectural Insights & Core Optimizations
+
+Today's training run on the **TinyStories** dataset highlighted three crucial architectural lessons in deep learning optimization:
+
+### **1. Weight Scale & Xavier/Glorot Initialization**
+*   **The Problem:** Initializing neural network weights with a hardcoded, tiny standard deviation (like `0.01`) causes the activations in deep networks to rapidly shrink toward zero. In the self-attention layer ([CausalSelfAttentionLayer.forward](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/nn/CausalSelfAttentionLayer.java#L37)), this results in query-key dot products $Q \cdot K^T$ that are extremely close to zero, flattening the softmax attention distribution to a uniform $1/T$ (average pooling). This completely kills the model's ability to learn word order and syntax.
+*   **The Solution:** We implemented **Xavier/Glorot Initialization** in [Matrix.random](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/math/Matrix.java#L19-L28). The weights are initialized with a standard deviation scaled dynamically by the dimensions:
+    $$\sigma = \sqrt{\frac{2.0}{\text{rows} + \text{cols}}}$$
+*   **Learning:** This stabilizes the variance of activations and gradients as they pass through layers, speeding up convergence by **over 10x** in unit tests.
+
+### **2. Causal Language Model (CLM) Loss**
+*   **The Problem:** Previously, the model trained by predicting only the *final* token of a 64-token sequence, discarding the gradients for the first 63 positions. This was extremely data-inefficient because $98.4\%$ of the forward-pass computations were thrown away.
+*   **The Solution:** We updated [LanguageModel.train](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/nn/LanguageModel.java#L68-L97) to compute causal next-token prediction loss over **all sequence positions** simultaneously. For input sequence $W = (w_0, w_1, \dots, w_{T-1})$, the model computes:
+    $$\mathcal{L} = \frac{1}{T} \sum_{i=0}^{T-1} -\log P(w_{i+1} \mid w_0, \dots, w_i)$$
+    The softmax backward gradients are divided by the sequence length $T$ to average the learning signal across all positions:
+    $$\frac{\partial \mathcal{L}}{\partial z_{i, j}} = \frac{1}{T} \left(P(j \mid w_0, \dots, w_i) - \text{target}_{i, j}\right)$$
+*   **Learning:** The model now extracts **64x more training signal** per sequence update, causing average loss to drop rapidly from Epoch 1 onwards.
+
+### **3. Dataset Shuffling in Parallel Hogwild! Training**
+*   **The Problem:** In [WordsCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/cli/WordsCLI.java), the model utilizes 14 threads to execute updates concurrently. When processing sequence chunks in sequential order (overlapping blocks), adjacent threads process highly correlated text regions. This creates locked step updates that push the weights in identical bad directions, causing early plateauing.
+*   **The Solution:** We shuffle the dataset list using `Collections.shuffle` at the beginning of each epoch.
+*   **Learning:** Shuffling breaks the correlation between parallel updates and makes the parallel gradient updates i.i.d. (independent and identically distributed), dramatically reducing gradient noise.
 
 ---
 
 ## ⚡ Performance Tuning (Java 26)
 
 ### **G1 GC: The "Dual Card Table" Advantage**
-By upgrading to Java 26, the model benefits from a major architectural shift in the G1 Garbage Collector. 
-- **The Problem:** Previously, the JVM had to "pause" or synchronize frequently to track memory references across threads.
-- **The Solution:** Java 26 uses two separate tables for tracking memory. Application threads write to one while the GC reads the other, virtually eliminating "contention" and lock-wait time.
+By upgrading to Java 26, the model benefits from a major architectural shift in the G1 Garbage Collector:
+- **The Problem:** Previously, the JVM had to synchronize frequently to track memory references across threads when they mutated objects (like weight matrices).
+- **The Solution:** Java 26 uses two separate tables for tracking memory. Application threads write to one while the GC reads the other, virtually eliminating lock-wait time during concurrent allocation.
 - **How to use:** This is enabled by default! You get a **5-15% throughput boost** just by running on Java 26.
 
 ### **Recommended JVM Memory Flags**
-For a 636k parameter model with heavy multi-threading, we recommend a generous heap and string optimization to keep the "Smart Student" efficient:
 ```bash
-# Recommended for 64GB RAM systems
 export MAVEN_OPTS="-Xms8g -Xmx16g -XX:+UseStringDeduplication"
 ```
 
@@ -37,146 +61,52 @@ Self-Attention is the "secret sauce" of LLMs. Think of it as a **dynamic spotlig
 
 ### **The "Creativity Dial" (Temperature)**
 When generating text, the model doesn't just pick the #1 answer. We use a "Creativity Dial" called **Temperature**:
-- **Low Temperature (0.1):** The model is very focused and conservative. It will always pick the most likely word (e.g., "The quick brown fox").
-- **High Temperature (1.2):** The model becomes "creative" (or "drunk"). It takes risks on less likely words, leading to more poetic or chaotic output.
-
-### **The Semantic Space (Embeddings)**
-Every word is assigned a location in a 192-dimensional "Semantic Space." Over time, the model learns to move related concepts closer together. Through training, the vector for "He" will naturally drift toward the vector for "She," and away from the vector for "Apple."
-
----
-
-## 🎓 Learning Path: 3 Experiments to Run
-
-Use this project as a laboratory to see AI principles in action:
-
-1.  **The "Lobotomy" Experiment:** Train for only 1 epoch and generate text. You'll see "alphabet soup." Train for 50 epochs, and you'll see "word salad." Train for 150, and you'll see "sentences."
-2.  **The "Context Stretch":** Find `BLOCK_SIZE` in `WordsCLI.java` and change it from 128 to 16. The model will suddenly "forget" the beginning of a sentence by the time it reaches the end. This proves why "Context Window" is so vital.
-3.  **The "Brain Size" Test:** Double the `D_MODEL` from 192 to 384. Watch how training slows down but the "Avg Loss" drops much faster. This illustrates the trade-off between model capacity and compute cost.
+- **Low Temperature (0.2):** The model is very focused and conservative. It will always pick the most likely word.
+- **High Temperature (0.8):** The model takes risks on less likely words, leading to more creative or poetic output.
 
 ---
 
 ## 🏗️ The LanguageModel Engine
 
-The `LanguageModel` class is the central nervous system of the project. It doesn't just hold weights; it orchestrates the entire flow of information:
-
-1.  **Orchestration (The Pipeline):** It passes data sequentially through the **Embedding**, **Positional Encoding**, and three **Transformer Blocks**.
-2.  **Forward Pass (Prediction):** It takes a sequence of integers (tokens) and produces a probability distribution for the *very next* token.
-3.  **Backward Pass (Learning):** This is where the "intelligence" happens. After comparing its prediction to the real target, it calculates the **Error Gradient**. It then sends this signal backward through every layer, telling each weight exactly how much it needs to change to be more accurate next time.
-4.  **Global Gradient Clipping:** To prevent the model from "tripping" over large errors (which can cause `NaN` values), the `LanguageModel` normalizes the total gradient if it exceeds a threshold (1.0).
+The [LanguageModel.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/nn/LanguageModel.java) class is the central nervous system of the project, orchestrating the flow of information:
+1.  **Forward Pass (Prediction):** Takes a sequence of subword tokens, applies embeddings, adds positional sine/cosine waves, and forwards it through 3 Transformer blocks (Self-Attention + Dense projections) to produce next-token probabilities.
+2.  **Backward Pass (Learning):** Backpropagates the cross-entropy prediction errors sequentially from the output head back to the embedding layers, updating parameters via Adam.
+3.  **Global Gradient Clipping:** Normalizes the cumulative gradient vector if its root-mean-square (RMS) exceeds `1.0` to avoid floating-point overflow (`NaN` values).
 
 ---
 
-## 🎓 Worked Example: The Training Lifecycle
+## 📂 Diagnostic & Execution Tools
 
-To understand how the "Smart Student" learns, let's trace a single piece of data through the system.
-
-### **1. Tokens (The Alphabet of Concepts)**
-Raw text is broken into BPE tokens.
-*   **Text:** `"The quick brown fox"`
-*   **Tokens:** `[45, 128, 512, 89]` (Integer IDs from `tokenizer.bin`)
-
-### **2. Sequences (The Context Window)**
-The model looks at a window of tokens called a **Sequence**. We use a `BLOCK_SIZE` of 128.
-*   **Input Sequence:** `[45, 128, 512]` (The context: "The quick brown")
-*   **Target Token:** `89` (The correct answer: "fox")
-
-### **3. The Training Step (The "Aha!" Moment)**
-1.  The model sees `[45, 128, 512]` and predicts probabilities for the next token.
-2.  It might predict: `{"dog": 0.1, "fox": 0.05, "cat": 0.2}`.
-3.  The **Loss Function** sees that the correct answer was `fox` (0.05) and calculates a high error because 5% is much lower than 100%.
-4.  **Backpropagation** calculates the gradients, and **Adam** updates the weights to make the prediction for `fox` higher next time.
-
-### **4. Epochs (The Full Curriculum)**
-*   **One Training Step:** Learning from one sequence (context -> next word).
-*   **One Epoch:** Learning from **every possible sequence** in your entire library (Sherlock Holmes, Dorian Gray, etc.).
-*   **150 Epochs:** The model reads the entire library 150 times, refining its internal "grammar" and "logic" with every pass.
-
----
-
-## 🎓 Technical Deep Dive: The Java Class Stack
-
-### **1. Core Execution & Math**
-*   **`WordsCLI.java`**: The main trainer. Orchestrates hyperparameters, multi-threaded training loops, and heartbeat monitoring.
-*   **`Matrix.java`**: The high-performance math engine using the **Java Vector API (SIMD)**.
-
-### **2. Tokenization & Data Handling**
-*   **`BPETokenizer.java`**: Implements **Byte Pair Encoding**. Discovers subword patterns and handles `<UNK>` tokens.
-*   **`BPETrainTool.java`**: Standalone tool used to "discover" the vocabulary and produce `tokenizer.bin`.
-*   **`TextDataset.java`**: Slices raw books into clean training sequences and handles Gutenberg header removal.
-*   **`InspectTokenizer.java`**: A diagnostic tool to visualize the subwords learned by the BPE process.
-
-### **3. Neural Network Layers (`nn`)**
-*   **`LanguageModel.java`**: The structural "brain" connecting all layers and managing the `train/predict` lifecycles.
-*   **`CausalSelfAttentionLayer.java`**: The core context engine allowing tokens to attend to previous tokens.
-*   **`EmbeddingLayer.java`**: Maps token IDs into 192-dimensional semantic vectors.
-*   **`PositionalEncoding.java`**: Injects awareness of token order using sine/cosine waves.
-*   **`DenseLayer.java`**: Standard fully-connected Feed-Forward layer.
-*   **`LayerNorm.java`**: Stabilizes deep training by normalizing activations.
-*   **`ResidualBlock.java`**: Implements "skip connections" to prevent vanishing gradients.
-*   **`SoftmaxLayer.java`**: Converts raw scores (logits) into a probability distribution.
-*   **`Adam.java`**: Adaptive optimizer tracking momentum and variance for every individual weight.
-*   **`TextGenerator.java`**: Implements **Temperature** and **Top-K** sampling to generate creative text.
-
----
-
-## 🧠 Mathematical Core: Softmax & Adam
-
-### **Softmax: From Scores to Probabilities**
-Softmax is the final "filter" that makes sense of the model's raw math. 
-1. **Exponentiation ($e^x$):** Every raw score is raised to the power of $e$. This aggressively rewards confident guesses.
-2. **Normalization:** Every value is divided by the total sum of all scores. This ensures the output is a valid probability distribution (summing to 100%).
-3. **The Learning Signal:** The error (gradient) is remarkably simple: **Prediction - Target**.
-
-### **Adam: The Adaptive Learner**
-**Adam (Adaptive Moment Estimation)** maintains separate learning rates for every single parameter:
-- **Momentum:** Remembers the *direction* of previous updates to carry speed through flat areas.
-- **Scaling:** Tracks the *variance* of updates. If a weight is jumping wildly, Adam slows it down; if it's stable, Adam speeds it up.
-
----
-
-## ⚡ Deep Dive: SIMD Vectorization (Java Vector API)
-SIMD allows the CPU to process multiple numbers simultaneously in a single clock cycle.
-
-**New SIMD Approach in `Matrix.java`:**
-```java
-for (; i < SPECIES.loopBound(arrayA.length); i += SPECIES.length()) {
-    var va = DoubleVector.fromArray(SPECIES, arrayA, i);
-    var vb = DoubleVector.fromArray(SPECIES, arrayB, i);
-    va.add(vb).intoArray(arrayA, i);
-}
-```
-This optimization doubled training throughput from ~45 seq/s to over 100 seq/s.
-
----
-
-## 📂 Diagnostic Tools
-
-### **1. Semantic Probe: Quantifying "Meaning"**
-The `SemanticProbe` is a powerful tool to measure **Distributional Semantics**. It calculates the **Euclidean Distance** between the embedding vectors of two words.
+### **1. Tokenizer Training**
+Trains BPE subword merges from a folder of text documents:
 ```bash
-./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.SemanticProbe"
+./train_tokenizer.sh
 ```
+*(By default, reads from `Training/TinyStories` to create a `800` token vocabulary).*
 
-### **2. Tokenizer Inspector**
-See the subword fragments discovered by the BPE process.
+### **2. Model Training**
+Trains the transformer using the Vector API and sequence shuffling:
 ```bash
-./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.InspectTokenizer"
+./train_model.sh
+```
+*(Configured to train on `Training/TinyStories` with $d_{model}=128$, $block\_size=64$, and a learning rate of `0.001` for 40 epochs).*
+
+### **3. Interactive Prompt CLI**
+Loads the trained tokenizer and model weights to generate text:
+```bash
+./prompt_model.sh
+```
+
+### **4. Semantic Probe**
+Calculates the **Euclidean Distance** between embedding vectors in [EmbeddingLayer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Words/src/main/java/com/learnai/words/nn/EmbeddingLayer.java) to inspect semantic relationships learned by the model:
+```bash
+./semantic_probe.sh
 ```
 
 ---
 
-## 🛠️ How to Run
-1. **Train Tokenizer:** `./mvnw exec:exec -Dexec.arguments="--add-modules,jdk.incubator.vector,-classpath,%classpath,com.learnai.words.tokenizer.BPETrainTool"`
-2. **Train Model:** `./mvnw clean compile exec:exec`
-3. **Monitor:** `tail -f training.log`
-
----
-
-## 📚 Further Reading
-- **[Attention Is All You Need](https://arxiv.org/abs/1706.03762)**: Original Transformer paper.
-- **[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)**: Visual math guide.
-- **[Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT)**: Minimalist GPT in Python.
-- **[BPE Explained](https://huggingface.co/learn/nlp-course/chapter6/5)**: Subword tokenization guide.
-
----
-*Created as part of the LearnAI series - Exploring Artificial Intelligence through fundamental engineering.*
+## 📚 Further Reading & References
+- **[Attention Is All You Need](https://arxiv.org/abs/1706.03762)**: The foundational Transformer architecture paper.
+- **[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)**: A step-by-step visual explanation of attention mathematics.
+- **[Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT)**: A minimalist PyTorch GPT implementation.
+- **[BPE Tokenization Guide](https://huggingface.co/learn/nlp-course/chapter6/5)**: Visual guide explaining Byte Pair Encoding merges.

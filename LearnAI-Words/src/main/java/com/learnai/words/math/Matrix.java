@@ -18,8 +18,8 @@ public class Matrix {
 
     public static Matrix random(int rows, int cols) {
         Matrix m = new Matrix(rows, cols);
-        // Ultra-conservative initialization for deep networks
-        double scale = 0.01;
+        // Xavier/Glorot initialization
+        double scale = Math.sqrt(2.0 / (rows + cols));
         ThreadLocalRandom r = ThreadLocalRandom.current();
         for (int i = 0; i < m.data.length; i++) {
             m.data[i] = r.nextGaussian() * scale;

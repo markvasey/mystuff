@@ -4,7 +4,7 @@ from datasets import load_dataset
 dataset = load_dataset("roneneldan/TinyStories", split="train", streaming=True)
 
 # 2. Extract exactly 100 stories
-sample_stories = [item["text"] for item in dataset.take(100)]
+sample_stories = [item["text"] for item in dataset.take(500)]
 
 # 3. Save them out as a single local file for inspection
 with open("100_children_stories.txt", "w", encoding="utf-8") as f:

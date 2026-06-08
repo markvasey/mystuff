@@ -21,11 +21,11 @@ public class WordsCLI {
     private static final Logger logger = LoggerFactory.getLogger(WordsCLI.class);
     
     // Phase 2 Hyperparameters
-    private static final int BLOCK_SIZE = 128;
-    private static final int D_MODEL = 192;
-    private static final double LEARNING_RATE = 0.0005;
-    private static final int EPOCHS = 150;
-    private static final int THREADS = 14;
+    private static final int BLOCK_SIZE = Integer.getInteger("block.size", 64);
+    private static final int D_MODEL = Integer.getInteger("d.model", 128);
+    private static final double LEARNING_RATE = Double.parseDouble(System.getProperty("learning.rate", "0.0005"));
+    private static final int EPOCHS = Integer.getInteger("epochs", 40);
+    private static final int THREADS = Integer.getInteger("threads", 14);
 
     public static void main(String[] args) throws IOException {
         logger.info("--- Phase 2: Smart Student Training (BPE + 18 Layers) ---");
@@ -40,7 +40,9 @@ public class WordsCLI {
             return;
         }
 
-        List<Path> trainingFiles = Files.list(Path.of("Training"))
+        String trainingDir = System.getProperty("training.dir", "Training/TinyStories");
+        logger.info("Scanning directory: {}", trainingDir);
+        List<Path> trainingFiles = Files.list(Path.of(trainingDir))
                 .filter(p -> p.toString().endsWith(".txt"))
                 .collect(Collectors.toList());
 
@@ -99,8 +101,11 @@ public class WordsCLI {
                 heartbeat.setDaemon(true);
                 heartbeat.start();
 
+                List<SequencePair> shuffledBatch = new ArrayList<>(trainingBatch);
+                java.util.Collections.shuffle(shuffledBatch);
+
                 pool.submit(() -> 
-                    trainingBatch.parallelStream().forEach(pair -> {
+                    shuffledBatch.parallelStream().forEach(pair -> {
                         double loss = model.train(pair.input(), pair.target(), LEARNING_RATE);
                         totalLoss.add(loss);
                         

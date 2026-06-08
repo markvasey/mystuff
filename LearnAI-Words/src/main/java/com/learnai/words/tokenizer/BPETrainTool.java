@@ -10,7 +10,11 @@ public class BPETrainTool {
     public static void main(String[] args) throws IOException {
         System.out.println("--- Phase 2: BPE Vocabulary Discovery ---");
         
-        List<Path> trainingFiles = Files.list(Path.of("Training"))
+        String trainingDir = System.getProperty("training.dir", "Training/TinyStories");
+        int vocabSize = Integer.getInteger("vocab.size", 800);
+        
+        System.out.println("Scanning directory: " + trainingDir);
+        List<Path> trainingFiles = Files.list(Path.of(trainingDir))
                 .filter(p -> p.toString().endsWith(".txt"))
                 .collect(Collectors.toList());
 
@@ -24,10 +28,10 @@ public class BPETrainTool {
         System.out.println("Corpus loaded: " + fullCorpus.length() + " characters.");
 
         BPETokenizer tokenizer = new BPETokenizer();
-        // Training to 1,000 tokens (256 base + 744 merges)
-        tokenizer.train(fullCorpus, 1000);
+        // Training to target vocab tokens
+        tokenizer.train(fullCorpus, vocabSize);
 
         tokenizer.save("tokenizer.bin");
-        System.out.println("Successfully saved 1,000 tokens to tokenizer.bin");
+        System.out.println("Successfully saved " + vocabSize + " tokens to tokenizer.bin");
     }
 }

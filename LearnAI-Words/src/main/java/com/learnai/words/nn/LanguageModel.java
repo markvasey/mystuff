@@ -71,28 +71,35 @@ public class LanguageModel {
         int seqLen = tokenIds.length;
         int vocabSize = probs.getCols();
 
-        double prob = Math.clamp(probs.get(seqLen - 1, targetId), 1e-12, 1.0);
-        double loss = -Math.log(prob);
-
+        // Calculate average loss over all sequence positions (predicting next token)
+        double loss = 0;
         Matrix target = new Matrix(seqLen, vocabSize);
+        for (int i = 0; i < seqLen - 1; i++) {
+            int nextTokenId = tokenIds[i + 1];
+            double prob = Math.clamp(probs.get(i, nextTokenId), 1e-12, 1.0);
+            loss += -Math.log(prob);
+            target.set(i, nextTokenId, 1.0);
+        }
+        double finalProb = Math.clamp(probs.get(seqLen - 1, targetId), 1e-12, 1.0);
+        loss += -Math.log(finalProb);
         target.set(seqLen - 1, targetId, 1.0);
+        loss /= seqLen;
 
         Matrix gradient = softmax.backward(target, fwd.finalProbs, learningRate);
 
-        // Zero out gradients for intermediate positions i < seqLen - 1
-        for (int i = 0; i < seqLen - 1; i++) {
-            int off = i * vocabSize;
-            for (int j = 0; j < vocabSize; j++) {
-                gradient.getData()[off + j] = 0.0;
-            }
+        // Scale gradient by 1/seqLen because the loss is averaged over all seqLen positions
+        double scale = 1.0 / seqLen;
+        double[] gData = gradient.getData();
+        for (int i = 0; i < gData.length; i++) {
+            gData[i] *= scale;
         }
 
         // Global Gradient Clipping (Clip norm to 1.0)
         double norm = Math.sqrt(gradient.square().rowMean().rowMean().get(0, 0));
         if (norm > 1.0) {
-            double scale = 1.0 / norm;
+            double clipScale = 1.0 / norm;
             double[] d = gradient.getData();
-            for (int i = 0; i < d.length; i++) d[i] *= scale;
+            for (int i = 0; i < d.length; i++) d[i] *= clipScale;
         }
         
         for (int i = layers.size() - 1; i >= 0; i--) {

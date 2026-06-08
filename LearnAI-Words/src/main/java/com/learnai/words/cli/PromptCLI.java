@@ -30,12 +30,15 @@ public class PromptCLI {
             return;
         }
 
-        System.out.println("Loading language model...");
-        LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), 192, 128);
+        int dModel = Integer.getInteger("d.model", 128);
+        int blockSize = Integer.getInteger("block.size", 64);
+
+        System.out.println("Loading language model (d_model=" + dModel + ", block_size=" + blockSize + ")...");
+        LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), dModel, blockSize);
         model.load(modelPath.toString());
         System.out.println("Model loaded successfully!");
 
-        TextGenerator generator = new TextGenerator(model, tokenizer, 128);
+        TextGenerator generator = new TextGenerator(model, tokenizer, blockSize);
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
