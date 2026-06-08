@@ -5,7 +5,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import jdk.incubator.vector.DoubleVector;
+import jdk.incubator.vector.VectorSpecies;
+
 public class CausalSelfAttentionLayer implements Layer {
+    private static final VectorSpecies<Double> SPECIES = DoubleVector.SPECIES_PREFERRED;
     private Matrix wq, wk, wv;
     private final Adam qOpt, kOpt, vOpt;
     private final int d_model;
@@ -37,12 +41,24 @@ public class CausalSelfAttentionLayer implements Layer {
 
         Matrix scores = q.multiply(k, false, true);
         double scale = Math.sqrt(d_model);
+        double invScale = 1.0 / scale;
         int rows = scores.getRows();
         int cols = scores.getCols();
+        double[] sData = scores.getData();
         for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < cols; j++) {
-                scores.set(i, j, scores.get(i, j) / scale);
-                if (j > i) scores.set(i, j, -1e9);
+            int off = i * cols;
+            int activeLimit = i + 1;
+            int j = 0;
+            var vInvScale = DoubleVector.broadcast(SPECIES, invScale);
+            for (; j < SPECIES.loopBound(activeLimit); j += SPECIES.length()) {
+                var vVec = DoubleVector.fromArray(SPECIES, sData, off + j);
+                vVec.mul(vInvScale).intoArray(sData, off + j);
+            }
+            for (; j < activeLimit; j++) {
+                sData[off + j] *= invScale;
+            }
+            if (activeLimit < cols) {
+                java.util.Arrays.fill(sData, off + activeLimit, off + cols, -1e9);
             }
         }
 
@@ -70,21 +86,31 @@ public class CausalSelfAttentionLayer implements Layer {
         Matrix dS = new Matrix(A.getRows(), A.getCols());
         for (int i = 0; i < A.getRows(); i++) {
             double dot = 0;
-            for (int k_idx = 0; k_idx < A.getCols(); k_idx++) {
+            for (int k_idx = 0; k_idx <= i; k_idx++) {
                 dot += dA.get(i, k_idx) * A.get(i, k_idx);
             }
-            for (int j = 0; j < A.getCols(); j++) {
+            for (int j = 0; j <= i; j++) {
                 dS.set(i, j, A.get(i, j) * (dA.get(i, j) - dot));
             }
+            // elements j > i are left at their initialized value of 0.0
         }
         
         // 4. dQ, dK through Scaling and Masking
         double scale = 1.0 / Math.sqrt(d_model);
+        double[] dsData = dS.getData();
         for (int i = 0; i < dS.getRows(); i++) {
-            for (int j = 0; j < dS.getCols(); j++) {
-                dS.set(i, j, dS.get(i, j) * scale);
-                if (j > i) dS.set(i, j, 0); 
+            int off = i * dS.getCols();
+            int activeLimit = i + 1;
+            int j = 0;
+            var vScale = DoubleVector.broadcast(SPECIES, scale);
+            for (; j < SPECIES.loopBound(activeLimit); j += SPECIES.length()) {
+                var vVec = DoubleVector.fromArray(SPECIES, dsData, off + j);
+                vVec.mul(vScale).intoArray(dsData, off + j);
             }
+            for (; j < activeLimit; j++) {
+                dsData[off + j] *= scale;
+            }
+            // elements j > i are already 0.0 from initialization
         }
 
         Matrix Q = X.multiply(wq);
