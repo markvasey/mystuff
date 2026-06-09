@@ -1,0 +1,52 @@
+package com.learnai.words.nn;
+
+import com.learnai.words.math.Matrix;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
+public class SoftmaxLayer implements Layer {
+
+    @Override
+    public ForwardResult forward(Matrix input) {
+        Matrix output = new Matrix(input.getRows(), input.getCols());
+        for (int i = 0; i < input.getRows(); i++) {
+            float max = Float.NEGATIVE_INFINITY;
+            for (int j = 0; j < input.getCols(); j++) {
+                if (input.get(i, j) > max) max = input.get(i, j);
+            }
+
+            float sum = 0.0f;
+            for (int j = 0; j < input.getCols(); j++) {
+                float val = (float) Math.exp(input.get(i, j) - max);
+                output.set(i, j, val);
+                sum += val;
+            }
+
+            for (int j = 0; j < input.getCols(); j++) {
+                float prob = output.get(i, j) / sum;
+                // Clip to avoid exactly 0.0 or 1.0 which causes NaNs in log/gradients
+                output.set(i, j, Math.clamp(prob, 1e-15f, 1.0f - 1e-15f));
+            }
+        }
+        return new ForwardResult(output, output);
+    }
+
+    @Override
+    public Matrix backward(Matrix target, Object context, float learningRate) {
+        Matrix lastOutput = (Matrix) context;
+        Matrix gradient = new Matrix(lastOutput.getRows(), lastOutput.getCols());
+        for (int i = 0; i < lastOutput.getRows(); i++) {
+            for (int j = 0; j < lastOutput.getCols(); j++) {
+                gradient.set(i, j, lastOutput.get(i, j) - target.get(i, j));
+            }
+        }
+        return gradient;
+    }
+
+    @Override
+    public void save(DataOutputStream dos) throws IOException {}
+
+    @Override
+    public void load(DataInputStream dis) throws IOException {}
+}
