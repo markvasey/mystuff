@@ -35,6 +35,13 @@ public class CudaBridge {
     private static final MethodHandle cudaLayerNormForwardHandle;
     private static final MethodHandle cudaLayerNormBackwardHandle;
 
+    private static final MethodHandle cudaAttentionQKForwardHandle;
+    private static final MethodHandle cudaAttentionOutForwardHandle;
+    private static final MethodHandle cudaAttentionDVBackwardHandle;
+    private static final MethodHandle cudaAttentionDABackwardHandle;
+    private static final MethodHandle cudaAttentionDQBackwardHandle;
+    private static final MethodHandle cudaAttentionDKBackwardHandle;
+
     static {
         // Find the shared library libwords_cuda.so
         Path libPath = Path.of("libwords_cuda.so");
@@ -269,6 +276,78 @@ public class CudaBridge {
                     ValueLayout.JAVA_INT, // rows
                     ValueLayout.JAVA_INT, // cols
                     ValueLayout.JAVA_FLOAT // eps
+                )
+            );
+
+            cudaAttentionQKForwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_q_k_forward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_q_k_forward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
+                )
+            );
+
+            cudaAttentionOutForwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_out_forward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_out_forward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
+                )
+            );
+
+            cudaAttentionDVBackwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_dv_backward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_dv_backward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
+                )
+            );
+
+            cudaAttentionDABackwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_da_backward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_da_backward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
+                )
+            );
+
+            cudaAttentionDQBackwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_dq_backward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_dq_backward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
+                )
+            );
+
+            cudaAttentionDKBackwardHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_attention_dk_backward").orElseThrow(() -> new NoSuchMethodError("cuda_attention_dk_backward")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT
                 )
             );
 
@@ -516,6 +595,72 @@ public class CudaBridge {
             }
         } catch (Throwable ex) {
             throw new RuntimeException("Error executing cudaLayerNormBackward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionQKForward(MemorySegment q, MemorySegment k, MemorySegment scores, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionQKForwardHandle.invokeExact(q, k, scores, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionQKForward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionQKForward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionOutForward(MemorySegment scores, MemorySegment v, MemorySegment output, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionOutForwardHandle.invokeExact(scores, v, output, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionOutForward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionOutForward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionDVBackward(MemorySegment A, MemorySegment dO, MemorySegment dV, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionDVBackwardHandle.invokeExact(A, dO, dV, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionDVBackward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionDVBackward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionDABackward(MemorySegment dO, MemorySegment v, MemorySegment dA, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionDABackwardHandle.invokeExact(dO, v, dA, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionDABackward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionDABackward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionDQBackward(MemorySegment dS, MemorySegment k, MemorySegment dQ, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionDQBackwardHandle.invokeExact(dS, k, dQ, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionDQBackward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionDQBackward: " + ex.getMessage(), ex);
+        }
+    }
+
+    public static void cudaAttentionDKBackward(MemorySegment dS, MemorySegment q, MemorySegment dK, int B, int T, int dModel) {
+        try {
+            int status = (int) cudaAttentionDKBackwardHandle.invokeExact(dS, q, dK, B, T, dModel);
+            if (status != 0) {
+                throw new RuntimeException("cudaAttentionDKBackward failed with exit code: " + status);
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException("Error executing cudaAttentionDKBackward: " + ex.getMessage(), ex);
         }
     }
 }

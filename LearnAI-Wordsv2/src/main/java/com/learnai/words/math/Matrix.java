@@ -95,7 +95,7 @@ public class Matrix {
     public void addInPlace(Matrix other) {
         float[] a = this.data;
         float[] b = other.data;
-        if (other.rows == 1 && this.rows > 1) { // Broadcasting
+        if (other.rows == 1 && this.rows > 1) { // Broadcasting row vector
             for (int i = 0; i < rows; i++) {
                 int off = i * cols;
                 int j = 0;
@@ -105,6 +105,11 @@ public class Matrix {
                     va.add(vb).intoArray(a, off + j);
                 }
                 for (; j < cols; j++) a[off + j] += b[j];
+            }
+        } else if (other.rows > 1 && this.rows > other.rows) { // Tiling positional encoding
+            int bSize = other.rows * other.cols;
+            for (int i = 0; i < a.length; i++) {
+                a[i] += b[i % bSize];
             }
         } else {
             int i = 0;

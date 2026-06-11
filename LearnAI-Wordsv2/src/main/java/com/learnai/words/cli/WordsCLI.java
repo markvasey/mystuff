@@ -1,6 +1,5 @@
 package com.learnai.words.cli;
 
-import com.learnai.words.nn.LanguageModel;
 import com.learnai.words.nn.GpuLanguageModel;
 import com.learnai.words.nn.TextGenerator;
 import com.learnai.words.tokenizer.BPETokenizer;
@@ -26,18 +25,15 @@ public class WordsCLI {
     private static final int D_MODEL = Integer.getInteger("d.model", 128);
     private static final float LEARNING_RATE = Float.parseFloat(System.getProperty("learning.rate", "0.0005"));
     private static final int EPOCHS = Integer.getInteger("epochs", 40);
-    private static final int THREADS = Integer.getInteger("threads", 14);
-    private static final boolean USE_GPU = Boolean.getBoolean("use.gpu");
 
     private interface ModelWrapper extends AutoCloseable {
         int getCompletedEpochs();
         void setCompletedEpochs(int n);
-        float train(int[] input, int target, float lr);
+        void close();
+        float train(int[] input, int[] targets, float lr);
         void save(String path) throws IOException;
         void load(String path) throws IOException;
         TextGenerator createGenerator(BPETokenizer tokenizer, int blockSize);
-        @Override
-        void close();
     }
 
     public static void main(String[] args) throws IOException {
@@ -68,36 +64,19 @@ public class WordsCLI {
 
         logger.info("Vocabulary Size: {}", tokenizer.getVocabSize());
 
-        final ModelWrapper model;
-        if (USE_GPU) {
-            logger.info("Using GPU Model for training");
-            GpuLanguageModel gpuModel = new GpuLanguageModel(tokenizer.getVocabSize(), D_MODEL, BLOCK_SIZE);
-            model = new ModelWrapper() {
-                public int getCompletedEpochs() { return gpuModel.getCompletedEpochs(); }
-                public void setCompletedEpochs(int n) { gpuModel.setCompletedEpochs(n); }
-                public float train(int[] input, int target, float lr) { return gpuModel.train(input, target, lr); }
-                public void save(String path) throws IOException { gpuModel.save(path); }
-                public void load(String path) throws IOException { gpuModel.load(path); }
-                public TextGenerator createGenerator(BPETokenizer tokenizer, int blockSize) {
-                    return new TextGenerator(gpuModel, tokenizer, blockSize);
-                }
-                public void close() { gpuModel.close(); }
-            };
-        } else {
-            logger.info("Using CPU Model for training");
-            LanguageModel cpuModel = new LanguageModel(tokenizer.getVocabSize(), D_MODEL, BLOCK_SIZE);
-            model = new ModelWrapper() {
-                public int getCompletedEpochs() { return cpuModel.getCompletedEpochs(); }
-                public void setCompletedEpochs(int n) { cpuModel.setCompletedEpochs(n); }
-                public float train(int[] input, int target, float lr) { return cpuModel.train(input, target, lr); }
-                public void save(String path) throws IOException { cpuModel.save(path); }
-                public void load(String path) throws IOException { cpuModel.load(path); }
-                public TextGenerator createGenerator(BPETokenizer tokenizer, int blockSize) {
-                    return new TextGenerator(cpuModel, tokenizer, blockSize);
-                }
-                public void close() {}
-            };
-        }
+        logger.info("Using GPU Model for training");
+        GpuLanguageModel gpuModel = new GpuLanguageModel(tokenizer.getVocabSize(), D_MODEL, BLOCK_SIZE);
+        final ModelWrapper model = new ModelWrapper() {
+            public int getCompletedEpochs() { return gpuModel.getCompletedEpochs(); }
+            public void setCompletedEpochs(int n) { gpuModel.setCompletedEpochs(n); }
+            public float train(int[] input, int[] targets, float lr) { return gpuModel.train(input, targets, lr); }
+            public void save(String path) throws IOException { gpuModel.save(path); }
+            public void load(String path) throws IOException { gpuModel.load(path); }
+            public TextGenerator createGenerator(BPETokenizer tokenizer, int blockSize) {
+                return new TextGenerator(gpuModel, tokenizer, blockSize);
+            }
+            public void close() { gpuModel.close(); }
+        };
 
         Path modelPath = Path.of("model.bin");
         int startEpoch = 1;
@@ -120,8 +99,6 @@ public class WordsCLI {
         int totalSequences = Math.min(pairs.size(), 100000);
         final List<SequencePair> trainingBatch = pairs.subList(0, totalSequences);
         logger.info("Training on {} sequences", totalSequences);
-
-        ForkJoinPool pool = new ForkJoinPool(THREADS);
         try {
             for (int epoch = startEpoch; epoch <= EPOCHS; epoch++) {
                 final DoubleAdder totalLoss = new DoubleAdder();
@@ -148,40 +125,36 @@ public class WordsCLI {
                 List<SequencePair> shuffledBatch = new ArrayList<>(trainingBatch);
                 java.util.Collections.shuffle(shuffledBatch);
 
-                if (USE_GPU) {
-                    for (SequencePair pair : shuffledBatch) {
-                        float loss = model.train(pair.input(), pair.target(), LEARNING_RATE);
-                        totalLoss.add(loss);
-                        
-                        int count = processed.incrementAndGet();
-                        if (count % 10000 == 0) {
-                            try {
-                                synchronized(model) { 
-                                    model.setCompletedEpochs(currentEpoch - 1); // Partial save
-                                    model.save(modelPath.toString()); 
-                                }
-                                logger.info("Checkpoint saved at {} sequences", count);
-                            } catch (IOException e) { logger.error("Save failed", e); }
-                        }
+                int trainBatchSize = Integer.getInteger("batch.size.train", 128);
+                int numBatches = (totalSequences + trainBatchSize - 1) / trainBatchSize;
+
+                for (int b = 0; b < numBatches; b++) {
+                    int startIdx = b * trainBatchSize;
+                    int endIdx = Math.min(startIdx + trainBatchSize, totalSequences);
+                    int currentBatchSize = endIdx - startIdx;
+                    if (currentBatchSize <= 0) break;
+
+                    int[] flatInputs = new int[currentBatchSize * BLOCK_SIZE];
+                    int[] flatTargets = new int[currentBatchSize];
+                    for (int i = 0; i < currentBatchSize; i++) {
+                        SequencePair pair = shuffledBatch.get(startIdx + i);
+                        System.arraycopy(pair.input(), 0, flatInputs, i * BLOCK_SIZE, BLOCK_SIZE);
+                        flatTargets[i] = pair.target();
                     }
-                } else {
-                    pool.submit(() -> 
-                        shuffledBatch.parallelStream().forEach(pair -> {
-                            float loss = model.train(pair.input(), pair.target(), LEARNING_RATE);
-                            totalLoss.add(loss);
-                            
-                            int count = processed.incrementAndGet();
-                            if (count % 10000 == 0) {
-                                try {
-                                    synchronized(model) { 
-                                        model.setCompletedEpochs(currentEpoch - 1); // Partial save
-                                        model.save(modelPath.toString()); 
-                                    }
-                                    logger.info("Checkpoint saved at {} sequences", count);
-                                } catch (IOException e) { logger.error("Save failed", e); }
+
+                    float loss = model.train(flatInputs, flatTargets, LEARNING_RATE);
+                    totalLoss.add(loss * currentBatchSize);
+                    
+                    int count = processed.addAndGet(currentBatchSize);
+                    if (count / 10000 > (count - currentBatchSize) / 10000) {
+                        try {
+                            synchronized(model) { 
+                                model.setCompletedEpochs(currentEpoch - 1);
+                                model.save(modelPath.toString()); 
                             }
-                        })
-                    ).get();
+                            logger.info("Checkpoint saved at {} sequences", count);
+                        } catch (IOException e) { logger.error("Save failed", e); }
+                    }
                 }
 
                 long epochEnd = System.currentTimeMillis();
@@ -199,7 +172,6 @@ public class WordsCLI {
         } catch (Exception e) {
             logger.error("Training interrupted", e);
         } finally {
-            pool.shutdown();
             try {
                 model.close();
             } catch (Exception e) {

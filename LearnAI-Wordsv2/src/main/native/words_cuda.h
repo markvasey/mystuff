@@ -47,6 +47,12 @@ int cuda_embedding_backward(const float* output_gradient, const int* token_ids, 
 int cuda_attention_forward(float* scores, int rows, int cols, float inv_scale);
 int cuda_attention_backward(const float* A, const float* dA, float* dS,
                             int rows, int cols, float scale);
+int cuda_attention_q_k_forward(const float* q, const float* k, float* scores, int B, int T, int d_model);
+int cuda_attention_out_forward(const float* scores, const float* v, float* output, int B, int T, int d_model);
+int cuda_attention_dv_backward(const float* A, const float* dO, float* dV, int B, int T, int d_model);
+int cuda_attention_da_backward(const float* dO, const float* v, float* dA, int B, int T, int d_model);
+int cuda_attention_dq_backward(const float* dS, const float* k, float* dQ, int B, int T, int d_model);
+int cuda_attention_dk_backward(const float* dS, const float* q, float* dK, int B, int T, int d_model);
 
 // Softmax Operations
 int cuda_softmax_forward(const float* input, float* output, int rows, int cols);

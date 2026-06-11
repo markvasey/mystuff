@@ -5,21 +5,12 @@ import com.learnai.words.tokenizer.BPETokenizer;
 import java.util.*;
 
 public class TextGenerator {
-    private final LanguageModel model;
     private final GpuLanguageModel gpuModel;
     private final BPETokenizer tokenizer;
     private final int blockSize;
     private final Random random = new Random();
 
-    public TextGenerator(LanguageModel model, BPETokenizer tokenizer, int blockSize) {
-        this.model = model;
-        this.gpuModel = null;
-        this.tokenizer = tokenizer;
-        this.blockSize = blockSize;
-    }
-
     public TextGenerator(GpuLanguageModel gpuModel, BPETokenizer tokenizer, int blockSize) {
-        this.model = null;
         this.gpuModel = gpuModel;
         this.tokenizer = tokenizer;
         this.blockSize = blockSize;
@@ -48,7 +39,7 @@ public class TextGenerator {
 
         StringBuilder result = new StringBuilder(prompt);
         for (int i = 0; i < numTokens; i++) {
-            Matrix probs = (model != null) ? model.predict(currentIds) : gpuModel.predict(currentIds);
+            Matrix probs = gpuModel.predict(currentIds);
             int nextId = sampleWithStrategy(probs, temperature, topK);
             
             result.append(tokenizer.decode(new int[]{nextId}));

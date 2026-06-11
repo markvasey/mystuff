@@ -87,12 +87,14 @@ __global__ void adam_update_kernel(float* w, const float* g, float* m, float* v,
     }
 }
 
-__global__ void add_in_place_kernel(float* a, const float* b, int size, int a_cols, int broadcast) {
+__global__ void add_in_place_kernel(float* a, const float* b, int size, int a_cols, int b_size, int broadcast) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
-        if (broadcast) {
+        if (broadcast == 1) {
             int col = idx % a_cols;
             a[idx] += b[col];
+        } else if (broadcast == 2) {
+            a[idx] += b[idx % b_size];
         } else {
             a[idx] += b[idx];
         }
@@ -185,7 +187,7 @@ __global__ void attention_forward_kernel(float* scores, int rows, int cols, floa
     int row = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < rows) {
         int offset = row * cols;
-        int activeLimit = row + 1;
+        int activeLimit = (row % cols) + 1;
         
         float max_val = -1e20f;
         for (int j = 0; j < activeLimit; j++) {
@@ -218,7 +220,7 @@ __global__ void attention_backward_kernel(const float* A, const float* dA, float
     int row = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < rows) {
         int offset = row * cols;
-        int activeLimit = row + 1;
+        int activeLimit = (row % cols) + 1;
         
         float dot = 0.0f;
         for (int k = 0; k < activeLimit; k++) {
@@ -231,6 +233,96 @@ __global__ void attention_backward_kernel(const float* A, const float* dA, float
         for (int j = activeLimit; j < cols; j++) {
             dS[offset + j] = 0.0f;
         }
+    }
+}
+
+__global__ void attention_q_k_forward_kernel(const float* q, const float* k, float* scores, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int col = blockIdx.x * blockDim.x + threadIdx.x; // 0 to T - 1
+    if (row < B * T && col < T) {
+        int b = row / T;
+        float sum = 0.0f;
+        int q_offset = row * d_model;
+        int k_offset = (b * T + col) * d_model;
+        for (int d = 0; d < d_model; d++) {
+            sum += q[q_offset + d] * k[k_offset + d];
+        }
+        scores[row * T + col] = sum;
+    }
+}
+
+__global__ void attention_out_forward_kernel(const float* scores, const float* v, float* output, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int d = blockIdx.x * blockDim.x + threadIdx.x; // 0 to d_model - 1
+    if (row < B * T && d < d_model) {
+        int b = row / T;
+        float sum = 0.0f;
+        int s_offset = row * T;
+        int v_offset = b * T * d_model + d;
+        for (int j = 0; j < T; j++) {
+            sum += scores[s_offset + j] * v[v_offset + j * d_model];
+        }
+        output[row * d_model + d] = sum;
+    }
+}
+
+__global__ void attention_dv_backward_kernel(const float* A, const float* dO, float* dV, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int d = blockIdx.x * blockDim.x + threadIdx.x; // 0 to d_model - 1
+    if (row < B * T && d < d_model) {
+        int b = row / T;
+        int i = row % T;
+        float sum = 0.0f;
+        int dO_offset = b * T * d_model + d;
+        for (int j = 0; j < T; j++) {
+            sum += A[(b * T + j) * T + i] * dO[dO_offset + j * d_model];
+        }
+        dV[row * d_model + d] = sum;
+    }
+}
+
+__global__ void attention_da_backward_kernel(const float* dO, const float* v, float* dA, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int col = blockIdx.x * blockDim.x + threadIdx.x; // 0 to T - 1
+    if (row < B * T && col < T) {
+        int b = row / T;
+        float sum = 0.0f;
+        int do_offset = row * d_model;
+        int v_offset = (b * T + col) * d_model;
+        for (int d = 0; d < d_model; d++) {
+            sum += dO[do_offset + d] * v[v_offset + d];
+        }
+        dA[row * T + col] = sum;
+    }
+}
+
+__global__ void attention_dq_backward_kernel(const float* dS, const float* k, float* dQ, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int d = blockIdx.x * blockDim.x + threadIdx.x; // 0 to d_model - 1
+    if (row < B * T && d < d_model) {
+        int b = row / T;
+        float sum = 0.0f;
+        int ds_offset = row * T;
+        int k_offset = b * T * d_model + d;
+        for (int j = 0; j < T; j++) {
+            sum += dS[ds_offset + j] * k[k_offset + j * d_model];
+        }
+        dQ[row * d_model + d] = sum;
+    }
+}
+
+__global__ void attention_dk_backward_kernel(const float* dS, const float* q, float* dK, int B, int T, int d_model) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 0 to B*T - 1
+    int d = blockIdx.x * blockDim.x + threadIdx.x; // 0 to d_model - 1
+    if (row < B * T && d < d_model) {
+        int b = row / T;
+        int i = row % T;
+        float sum = 0.0f;
+        int q_offset = b * T * d_model + d;
+        for (int j = 0; j < T; j++) {
+            sum += dS[(b * T + j) * T + i] * q[q_offset + j * d_model];
+        }
+        dK[row * d_model + d] = sum;
     }
 }
 
@@ -395,12 +487,17 @@ int cuda_adam_update(float* w, const float* g, float* m, float* v,
 }
 
 int cuda_add_in_place(float* a, const float* b, int a_rows, int a_cols, int b_rows, int b_cols) {
-    (void)b_cols;
     int size = a_rows * a_cols;
-    int broadcast = (b_rows == 1 && a_rows > 1) ? 1 : 0;
+    int b_size = b_rows * b_cols;
+    int broadcast = 0;
+    if (b_rows == 1 && a_rows > 1) {
+        broadcast = 1;
+    } else if (b_rows > 1 && a_rows > b_rows) {
+        broadcast = 2; // tiling
+    }
     int threadsPerBlock = 256;
     int numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
-    add_in_place_kernel<<<numBlocks, threadsPerBlock>>>(a, b, size, a_cols, broadcast);
+    add_in_place_kernel<<<numBlocks, threadsPerBlock>>>(a, b, size, a_cols, b_size, broadcast);
     cudaError_t err = cudaDeviceSynchronize();
     if (err != cudaSuccess) {
         fprintf(stderr, "cuda_add_in_place failed: %s\n", cudaGetErrorString(err));
@@ -547,6 +644,84 @@ int cuda_attention_backward(const float* A, const float* dA, float* dS,
     return 0;
 }
 
+int cuda_attention_q_k_forward(const float* q, const float* k, float* scores, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((T + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_q_k_forward_kernel<<<numBlocks, threadsPerBlock>>>(q, k, scores, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_q_k_forward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
+int cuda_attention_out_forward(const float* scores, const float* v, float* output, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((d_model + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_out_forward_kernel<<<numBlocks, threadsPerBlock>>>(scores, v, output, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_out_forward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
+int cuda_attention_dv_backward(const float* A, const float* dO, float* dV, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((d_model + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_dv_backward_kernel<<<numBlocks, threadsPerBlock>>>(A, dO, dV, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_dv_backward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
+int cuda_attention_da_backward(const float* dO, const float* v, float* dA, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((T + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_da_backward_kernel<<<numBlocks, threadsPerBlock>>>(dO, v, dA, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_da_backward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
+int cuda_attention_dq_backward(const float* dS, const float* k, float* dQ, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((d_model + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_dq_backward_kernel<<<numBlocks, threadsPerBlock>>>(dS, k, dQ, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_dq_backward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
+int cuda_attention_dk_backward(const float* dS, const float* q, float* dK, int B, int T, int d_model) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((d_model + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (B * T + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    attention_dk_backward_kernel<<<numBlocks, threadsPerBlock>>>(dS, q, dK, B, T, d_model);
+    cudaError_t err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "cuda_attention_dk_backward failed: %s\n", cudaGetErrorString(err));
+        return (int)err;
+    }
+    return 0;
+}
+
 int cuda_softmax_forward(const float* input, float* output, int rows, int cols) {
     int threadsPerBlock = 256;
     int numBlocks = (rows + threadsPerBlock - 1) / threadsPerBlock;
@@ -656,13 +831,18 @@ int cuda_adam_update(float* w, const float* g, float* m, float* v,
 }
 
 int cuda_add_in_place(float* a, const float* b, int a_rows, int a_cols, int b_rows, int b_cols) {
-    (void)b_cols;
     if (b_rows == 1 && a_rows > 1) { // Broadcasting row vector
         for (int i = 0; i < a_rows; i++) {
             int offset = i * a_cols;
             for (int j = 0; j < a_cols; j++) {
                 a[offset + j] += b[j];
             }
+        }
+    } else if (b_rows > 1 && a_rows > b_rows) { // Tiling 2D matrix (e.g. pe)
+        int b_size = b_rows * b_cols;
+        int size = a_rows * a_cols;
+        for (int i = 0; i < size; i++) {
+            a[i] += b[i % b_size];
         }
     } else { // Direct element-wise
         int size = a_rows * a_cols;
@@ -761,7 +941,7 @@ int cuda_embedding_backward(const float* output_gradient, const int* token_ids, 
 int cuda_attention_forward(float* scores, int rows, int cols, float inv_scale) {
     for (int i = 0; i < rows; i++) {
         int offset = i * cols;
-        int activeLimit = i + 1;
+        int activeLimit = (i % cols) + 1;
         
         float max_val = -1e20f;
         for (int j = 0; j < activeLimit; j++) {
@@ -794,7 +974,7 @@ int cuda_attention_backward(const float* A, const float* dA, float* dS,
                             int rows, int cols, float scale) {
     for (int i = 0; i < rows; i++) {
         int offset = i * cols;
-        int activeLimit = i + 1;
+        int activeLimit = (i % cols) + 1;
         
         float dot = 0.0f;
         for (int k = 0; k < activeLimit; k++) {
@@ -806,6 +986,107 @@ int cuda_attention_backward(const float* A, const float* dA, float* dS,
         }
         for (int j = activeLimit; j < cols; j++) {
             dS[offset + j] = 0.0f;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_q_k_forward(const float* q, const float* k, float* scores, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int q_offset = row * d_model;
+        for (int col = 0; col < T; col++) {
+            int k_offset = (b * T + col) * d_model;
+            float sum = 0.0f;
+            for (int d = 0; d < d_model; d++) {
+                sum += q[q_offset + d] * k[k_offset + d];
+            }
+            scores[row * T + col] = sum;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_out_forward(const float* scores, const float* v, float* output, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int s_offset = row * T;
+        int out_offset = row * d_model;
+        int v_offset = b * T * d_model;
+        for (int d = 0; d < d_model; d++) {
+            float sum = 0.0f;
+            for (int j = 0; j < T; j++) {
+                sum += scores[s_offset + j] * v[v_offset + j * d_model + d];
+            }
+            output[out_offset + d] = sum;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_dv_backward(const float* A, const float* dO, float* dV, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int i = row % T;
+        int dv_offset = row * d_model;
+        int dO_offset = b * T * d_model;
+        for (int d = 0; d < d_model; d++) {
+            float sum = 0.0f;
+            for (int j = 0; j < T; j++) {
+                sum += A[(b * T + j) * T + i] * dO[dO_offset + j * d_model + d];
+            }
+            dV[dv_offset + d] = sum;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_da_backward(const float* dO, const float* v, float* dA, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int do_offset = row * d_model;
+        int da_offset = row * T;
+        for (int col = 0; col < T; col++) {
+            int v_offset = (b * T + col) * d_model;
+            float sum = 0.0f;
+            for (int d = 0; d < d_model; d++) {
+                sum += dO[do_offset + d] * v[v_offset + d];
+            }
+            dA[da_offset + col] = sum;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_dq_backward(const float* dS, const float* k, float* dQ, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int ds_offset = row * T;
+        int dq_offset = row * d_model;
+        int k_offset = b * T * d_model;
+        for (int d = 0; d < d_model; d++) {
+            float sum = 0.0f;
+            for (int j = 0; j < T; j++) {
+                sum += dS[ds_offset + j] * k[k_offset + j * d_model + d];
+            }
+            dQ[dq_offset + d] = sum;
+        }
+    }
+    return 0;
+}
+
+int cuda_attention_dk_backward(const float* dS, const float* q, float* dK, int B, int T, int d_model) {
+    for (int row = 0; row < B * T; row++) {
+        int b = row / T;
+        int i = row % T;
+        int dk_offset = row * d_model;
+        int q_offset = b * T * d_model;
+        for (int d = 0; d < d_model; d++) {
+            float sum = 0.0f;
+            for (int j = 0; j < T; j++) {
+                sum += dS[(b * T + j) * T + i] * q[q_offset + j * d_model + d];
+            }
+            dK[dk_offset + d] = sum;
         }
     }
     return 0;

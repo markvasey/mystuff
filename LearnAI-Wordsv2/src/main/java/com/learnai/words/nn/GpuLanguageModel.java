@@ -36,7 +36,7 @@ public class GpuLanguageModel implements AutoCloseable {
         // 3 Transformer Blocks
         for (int i = 0; i < 3; i++) {
             layers.add(new GpuLayerNorm(d_model));
-            layers.add(new GpuResidualBlock(new GpuCausalSelfAttentionLayer(d_model)));
+            layers.add(new GpuResidualBlock(new GpuCausalSelfAttentionLayer(d_model, maxLen)));
             layers.add(new GpuLayerNorm(d_model));
             layers.add(new GpuResidualBlock(new GpuDenseLayer(d_model, d_model)));
         }
@@ -81,10 +81,17 @@ public class GpuLanguageModel implements AutoCloseable {
     }
 
     public float train(int[] tokenIds, int targetId, float learningRate) {
+        return train(tokenIds, new int[]{targetId}, learningRate);
+    }
+
+    public float train(int[] tokenIds, int[] targetIds, float learningRate) {
         ModelForwardResult fwd = forward(tokenIds);
         GpuMatrix probs = fwd.finalProbs;
         int seqLen = tokenIds.length;
         int vocabSize = probs.getCols();
+
+        int B = targetIds.length;
+        int T = seqLen / B;
 
         // Download probs to calculate loss and build the target distribution
         float[] probsData = new float[seqLen * vocabSize];
@@ -92,15 +99,19 @@ public class GpuLanguageModel implements AutoCloseable {
 
         float loss = 0.0f;
         Matrix cpuTarget = new Matrix(seqLen, vocabSize);
-        for (int i = 0; i < seqLen - 1; i++) {
-            int nextTokenId = tokenIds[i + 1];
-            float prob = Math.clamp(probsData[i * vocabSize + nextTokenId], 1e-12f, 1.0f);
-            loss += (float) -Math.log(prob);
-            cpuTarget.set(i, nextTokenId, 1.0f);
+        for (int b = 0; b < B; b++) {
+            int offset = b * T;
+            for (int i = 0; i < T - 1; i++) {
+                int nextTokenId = tokenIds[offset + i + 1];
+                float prob = Math.clamp(probsData[(offset + i) * vocabSize + nextTokenId], 1e-12f, 1.0f);
+                loss += (float) -Math.log(prob);
+                cpuTarget.set(offset + i, nextTokenId, 1.0f);
+            }
+            int targetId = targetIds[b];
+            float finalProb = Math.clamp(probsData[(offset + T - 1) * vocabSize + targetId], 1e-12f, 1.0f);
+            loss += (float) -Math.log(finalProb);
+            cpuTarget.set(offset + T - 1, targetId, 1.0f);
         }
-        float finalProb = Math.clamp(probsData[(seqLen - 1) * vocabSize + targetId], 1e-12f, 1.0f);
-        loss += (float) -Math.log(finalProb);
-        cpuTarget.set(seqLen - 1, targetId, 1.0f);
         loss /= seqLen;
 
         GpuMatrix target = GpuMatrix.fromCpu(cpuTarget);

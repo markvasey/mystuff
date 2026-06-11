@@ -1,12 +1,13 @@
 package com.learnai.words.nn;
 
 import com.learnai.words.tokenizer.BPETokenizer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class GenerationTest {
-    private LanguageModel model;
+    private GpuLanguageModel model;
     private BPETokenizer tokenizer;
     private TextGenerator generator;
     private static final int BLOCK_SIZE = 32;
@@ -18,8 +19,15 @@ public class GenerationTest {
                      + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?'\"-";
         tokenizer = new BPETokenizer();
         tokenizer.train(corpus, 300); 
-        model = new LanguageModel(tokenizer.getVocabSize(), 64, BLOCK_SIZE);
+        model = new GpuLanguageModel(tokenizer.getVocabSize(), 64, BLOCK_SIZE);
         generator = new TextGenerator(model, tokenizer, BLOCK_SIZE);
+    }
+
+    @AfterEach
+    public void teardown() {
+        if (model != null) {
+            model.close();
+        }
     }
 
     @Test

@@ -1,8 +1,9 @@
 package com.learnai.words.tokenizer;
 
-import com.learnai.words.nn.LanguageModel;
+import com.learnai.words.nn.GpuLanguageModel;
 import com.learnai.words.math.Matrix;
-import com.learnai.words.nn.EmbeddingLayer;
+import com.learnai.words.math.GpuMatrix;
+import com.learnai.words.nn.GpuEmbeddingLayer;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Scanner;
@@ -18,17 +19,18 @@ public class SemanticProbe {
         tokenizer.load("tokenizer.bin");
         
         int dModel = Integer.getInteger("d.model", 128);
-        LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), dModel, 128);
+        GpuLanguageModel model = new GpuLanguageModel(tokenizer.getVocabSize(), dModel, 128);
         model.load("model.bin");
 
         // Use reflection to grab the embedding matrix (since it's private)
-        Field embField = LanguageModel.class.getDeclaredField("embedding");
+        Field embField = GpuLanguageModel.class.getDeclaredField("embedding");
         embField.setAccessible(true);
-        EmbeddingLayer embeddingLayer = (EmbeddingLayer) embField.get(model);
+        GpuEmbeddingLayer embeddingLayer = (GpuEmbeddingLayer) embField.get(model);
         
-        Field weightsField = EmbeddingLayer.class.getDeclaredField("embeddings");
+        Field weightsField = GpuEmbeddingLayer.class.getDeclaredField("embeddings");
         weightsField.setAccessible(true);
-        Matrix weights = (Matrix) weightsField.get(embeddingLayer);
+        GpuMatrix gpuWeights = (GpuMatrix) weightsField.get(embeddingLayer);
+        Matrix weights = gpuWeights.toCpu();
 
         Scanner scanner = new Scanner(System.in);
         System.out.println("--- Semantic Probe: Inspection Tool ---");

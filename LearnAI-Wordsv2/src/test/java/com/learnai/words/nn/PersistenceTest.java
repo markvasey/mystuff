@@ -22,26 +22,22 @@ public class PersistenceTest {
         int maxLen = 16;
         String modelFile = tempDir.resolve("test_model.bin").toString();
 
-        // 1. Create and initialize a model with random weights
-        LanguageModel model1 = new LanguageModel(vocabSize, dModel, maxLen);
-        
-        // 2. Capture a prediction from the original model
-        int[] input = {1, 2, 3, 4, 5};
-        Matrix pred1 = model1.predict(input);
-        float[] originalData = pred1.getData().clone();
+        float[] originalData;
+        try (GpuLanguageModel model1 = new GpuLanguageModel(vocabSize, dModel, maxLen)) {
+            int[] input = {1, 2, 3, 4, 5};
+            Matrix pred1 = model1.predict(input);
+            originalData = pred1.getData().clone();
+            model1.save(modelFile);
+        }
 
-        // 3. Save the model
-        model1.save(modelFile);
+        float[] reloadedData;
+        try (GpuLanguageModel model2 = new GpuLanguageModel(vocabSize, dModel, maxLen)) {
+            model2.load(modelFile);
+            int[] input = {1, 2, 3, 4, 5};
+            Matrix pred2 = model2.predict(input);
+            reloadedData = pred2.getData().clone();
+        }
 
-        // 4. Create a new model and load the weights
-        LanguageModel model2 = new LanguageModel(vocabSize, dModel, maxLen);
-        model2.load(modelFile);
-
-        // 5. Capture a prediction from the reloaded model
-        Matrix pred2 = model2.predict(input);
-        float[] reloadedData = pred2.getData();
-
-        // 6. Assert that the outputs are identical
         assertArrayEquals(originalData, reloadedData, 1e-6f, "Predictions should be identical after loading weights");
     }
 }

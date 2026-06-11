@@ -1,7 +1,6 @@
 package com.learnai.words.cli;
 
 import com.learnai.words.nn.GpuLanguageModel;
-import com.learnai.words.nn.LanguageModel;
 import com.learnai.words.nn.TextGenerator;
 import com.learnai.words.tokenizer.BPETokenizer;
 
@@ -33,20 +32,11 @@ public class PromptCLI {
 
         int dModel = Integer.getInteger("d.model", 128);
         int blockSize = Integer.getInteger("block.size", 64);
-        boolean useGpu = Boolean.getBoolean("use.gpu");
 
-        final TextGenerator generator;
-        if (useGpu) {
-            System.out.println("Loading GPU language model (d_model=" + dModel + ", block_size=" + blockSize + ")...");
-            GpuLanguageModel model = new GpuLanguageModel(tokenizer.getVocabSize(), dModel, blockSize);
-            model.load(modelPath.toString());
-            generator = new TextGenerator(model, tokenizer, blockSize);
-        } else {
-            System.out.println("Loading CPU language model (d_model=" + dModel + ", block_size=" + blockSize + ")...");
-            LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), dModel, blockSize);
-            model.load(modelPath.toString());
-            generator = new TextGenerator(model, tokenizer, blockSize);
-        }
+        System.out.println("Loading GPU language model (d_model=" + dModel + ", block_size=" + blockSize + ")...");
+        GpuLanguageModel model = new GpuLanguageModel(tokenizer.getVocabSize(), dModel, blockSize);
+        model.load(modelPath.toString());
+        final TextGenerator generator = new TextGenerator(model, tokenizer, blockSize);
         
         Scanner scanner = new Scanner(System.in);
 

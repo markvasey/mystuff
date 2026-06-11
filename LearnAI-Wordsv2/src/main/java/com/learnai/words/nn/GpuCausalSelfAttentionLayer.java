@@ -11,6 +11,7 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
     private GpuMatrix wq, wk, wv;
     private final GpuAdam qOpt, kOpt, vOpt;
     private final int d_model;
+    private final int maxLen;
 
     private static class AttentionState implements AutoCloseable {
         public final GpuMatrix input;
@@ -27,7 +28,12 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
     }
 
     public GpuCausalSelfAttentionLayer(int d_model) {
+        this(d_model, 64);
+    }
+
+    public GpuCausalSelfAttentionLayer(int d_model, int maxLen) {
         this.d_model = d_model;
+        this.maxLen = maxLen;
         Matrix cpuWq = Matrix.random(d_model, d_model);
         Matrix cpuWk = Matrix.random(d_model, d_model);
         Matrix cpuWv = Matrix.random(d_model, d_model);
@@ -43,11 +49,19 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
 
     @Override
     public GpuForwardResult forward(GpuMatrix input) {
+        int B = input.getRows() / maxLen;
+        int T = maxLen;
+        if (input.getRows() % maxLen != 0 || input.getRows() < maxLen) {
+            B = 1;
+            T = input.getRows();
+        }
+
         GpuMatrix q = input.multiply(wq);
         GpuMatrix k = input.multiply(wk);
         GpuMatrix v = input.multiply(wv);
 
-        GpuMatrix scores = q.multiply(k, false, true);
+        GpuMatrix scores = new GpuMatrix(B * T, T);
+        CudaBridge.cudaAttentionQKForward(q.getDevicePtr(), k.getDevicePtr(), scores.getDevicePtr(), B, T, d_model);
         q.close();
         k.close();
 
@@ -56,7 +70,8 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
 
         CudaBridge.cudaAttentionForward(scores.getDevicePtr(), scores.getRows(), scores.getCols(), invScale);
 
-        GpuMatrix output = scores.multiply(v);
+        GpuMatrix output = new GpuMatrix(B * T, d_model);
+        CudaBridge.cudaAttentionOutForward(scores.getDevicePtr(), v.getDevicePtr(), output.getDevicePtr(), B, T, d_model);
         v.close();
 
         GpuMatrix inputCopy = new GpuMatrix(input.getRows(), input.getCols());
@@ -72,13 +87,22 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
         GpuMatrix X = state.input;
         GpuMatrix A = state.attnWeights;
 
+        int B = X.getRows() / maxLen;
+        int T = maxLen;
+        if (X.getRows() % maxLen != 0 || X.getRows() < maxLen) {
+            B = 1;
+            T = X.getRows();
+        }
+
         // 1. dL/dV = A^T * dOut
-        GpuMatrix dV = A.multiply(outputGradient, true, false);
+        GpuMatrix dV = new GpuMatrix(B * T, d_model);
+        CudaBridge.cudaAttentionDVBackward(A.getDevicePtr(), outputGradient.getDevicePtr(), dV.getDevicePtr(), B, T, d_model);
         GpuMatrix dWv = X.multiply(dV, true, false);
 
         // 2. dL/dA = dOut * V^T
         GpuMatrix V = X.multiply(wv);
-        GpuMatrix dA = outputGradient.multiply(V, false, true);
+        GpuMatrix dA = new GpuMatrix(B * T, T);
+        CudaBridge.cudaAttentionDABackward(outputGradient.getDevicePtr(), V.getDevicePtr(), dA.getDevicePtr(), B, T, d_model);
         V.close();
 
         // 3. dS (Softmax backward + Scaling + Masking)
@@ -91,8 +115,11 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
         GpuMatrix Q = X.multiply(wq);
         GpuMatrix K = X.multiply(wk);
 
-        GpuMatrix dQ = dS.multiply(K);
-        GpuMatrix dK = dS.multiply(Q, true, false);
+        GpuMatrix dQ = new GpuMatrix(B * T, d_model);
+        CudaBridge.cudaAttentionDQBackward(dS.getDevicePtr(), K.getDevicePtr(), dQ.getDevicePtr(), B, T, d_model);
+
+        GpuMatrix dK = new GpuMatrix(B * T, d_model);
+        CudaBridge.cudaAttentionDKBackward(dS.getDevicePtr(), Q.getDevicePtr(), dK.getDevicePtr(), B, T, d_model);
         Q.close();
         K.close();
 
