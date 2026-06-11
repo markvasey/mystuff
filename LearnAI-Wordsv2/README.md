@@ -162,58 +162,61 @@ Loads the trained tokenizer and model weights to prompt the LLM:
     *   *Role:* GPU Adam optimizer.
     *   *Mechanics:* Mutates and scales learning coefficients in VRAM using a vectorized CUDA Adam update kernel.
 
----
+## 📊 Case Study: 45-Epoch GPU Training Run Analysis (with Early Stopping)
 
-## 📊 Case Study: 40-Epoch GPU Training Run Analysis
-
-Training configuration: $d_{model} = 256$, $block\_size = 128$, $vocab\_size = 4,096$, batch size $512$, **80,839 sequences** from 5,000 children's stories (~808K tokens). Learning rate $0.0003$.
+Training configuration: $d_{model} = 256$, $block\_size = 256$, $vocab\_size = 4,096$, batch size $512$, **90,000 sequences** from the combined **Fictional Literature** library (~9.0M tokens). Learning rate $0.0001$.
 
 ### Epoch Loss Progression
 
-| Epoch | Avg Loss | Duration | Notes |
-| :---: | :---: | :---: | :--- |
-| 1 | 7.7160 | 74s | Random weights; learning basic token co-occurrence |
-| 2 | 6.9751 | 73s | Character clusters forming |
-| 3 | 5.2666 | 73s | **Major convergence step** — loss drops 1.7 in one epoch |
-| 4 | 4.7886 | 73s | Spelling patterns emerging |
-| **5** | **4.5096** | 73s | **Sample generated** |
-| 6 | 4.2720 | 73s | |
-| 7 | 4.0668 | 73s | |
-| 8 | 3.9004 | 73s | |
-| 9 | 3.7625 | 73s | |
-| **10** | **3.6466** | 73s | **Sample generated** |
-| 11 | 3.5457 | 73s | |
-| 12 | 3.4583 | 73s | |
-| 13 | 3.3803 | 73s | |
-| 14 | 3.3091 | 73s | |
-| **15** | **3.2434** | 73s | **Sample generated** |
-| 16 | 3.1845 | 73s | |
-| 17 | 3.1298 | 73s | |
-| 18 | 3.0767 | 74s | |
-| 19 | 3.0302 | 73s | |
-| **20** | **2.9827** | 73s | **Sample generated** |
-| 21 | 2.9402 | 73s | |
-| 22 | 2.9008 | 74s | |
-| 23 | 2.8626 | 73s | |
-| 24 | 2.8252 | 74s | |
-| **25** | **2.7901** | 74s | **Sample generated** |
-| 26 | 2.7580 | 74s | |
-| 27 | 2.7236 | 73s | |
-| 28 | 2.6928 | 73s | |
-| 29 | 2.6619 | 73s | |
-| **30** | **2.6330** | 73s | **Sample generated** |
-| 31 | 2.6043 | 73s | |
-| 32 | 2.5773 | 73s | |
-| 33 | 2.5522 | 73s | |
-| 34 | 2.5260 | 73s | |
-| **35** | **2.5014** | 73s | **Sample generated** |
-| 36 | 2.4760 | 73s | |
-| 37 | 2.4532 | 73s | |
-| 38 | 2.4296 | 73s | |
-| 39 | 2.4075 | 73s | |
-| **40** | **2.3866** | 73s | **Final model saved. Sample generated.** |
+| Epoch | Train Loss | Val Loss | Duration | Notes |
+| :---: | :---: | :---: | :---: | :--- |
+| 1 | 6.8693 | — | 248s | Random weights; learning basic token pairings |
+| 2 | 6.4666 | — | 247s | Common BPE character clusters forming |
+| 3 | 6.3764 | — | 247s | |
+| 4 | 5.8156 | — | 247s | |
+| **5** | **5.5371** | **5.6604** | **260s** | **Sample generated. Initial best validation loss checkpoint.** |
+| 6 | 5.3611 | — | 247s | |
+| 7 | 5.2114 | — | 247s | |
+| 8 | 5.0695 | — | 570s | Compiling spike / system overhead |
+| 9 | 4.9235 | — | 248s | |
+| **10** | **4.7824** | **5.0171** | **260s** | **Sample generated. New best validation loss.** |
+| 11 | 4.6582 | — | 247s | |
+| 12 | 4.5483 | — | 247s | |
+| 13 | 4.4460 | — | 248s | |
+| 14 | 4.3587 | — | 248s | |
+| **15** | **4.2855** | **4.6292** | **260s** | **Sample generated. New best validation loss.** |
+| 16 | 4.2223 | — | 248s | |
+| 17 | 4.1639 | — | 248s | |
+| 18 | 4.1120 | — | 248s | |
+| 19 | 4.0640 | — | 248s | |
+| **20** | **4.0179** | **4.4846** | **260s** | **Sample generated. New best validation loss.** |
+| 21 | 3.9753 | — | 248s | |
+| 22 | 3.9367 | — | 248s | |
+| 23 | 3.8973 | — | 248s | |
+| 24 | 3.8631 | — | 248s | |
+| **25** | **3.8284** | **4.3997** | **260s** | **Sample generated. New best validation loss.** |
+| 26 | 3.7967 | — | 248s | |
+| 27 | 3.7666 | — | 248s | |
+| 28 | 3.7359 | — | 248s | |
+| 29 | 3.7077 | — | 248s | |
+| **30** | **3.6818** | **4.3738** | **260s** | **Sample generated. New best validation loss.** |
+| 31 | 3.6551 | — | 248s | |
+| 32 | 3.6301 | — | 248s | |
+| 33 | 3.6055 | — | 248s | |
+| 34 | 3.5826 | — | 248s | |
+| **35** | **3.5610** | **4.3553** | **260s** | **Sample generated. Best validation loss checkpoint.** |
+| 36 | 3.5396 | — | 248s | |
+| 37 | 3.5190 | — | 248s | |
+| 38 | 3.4999 | — | 247s | |
+| 39 | 3.4800 | — | 247s | |
+| **40** | **3.4597** | **4.3658** | **260s** | **Sample generated. Val loss fails to improve (Patience 1/2).** |
+| 41 | 3.4433 | — | 248s | |
+| 42 | 3.4255 | — | 247s | |
+| 43 | 3.4084 | — | 248s | |
+| 44 | 3.3912 | — | 248s | |
+| **45** | **3.3747** | **4.3700** | **260s** | **Early stopping triggered (Patience 2/2).** |
 
-Loss fell **69.1%** from 7.7160 → 2.3866 over 40 epochs. Total training time: **~49 minutes**.
+Total training time: **~3 hours 10 minutes** on the GPU.
 
 ---
 
@@ -223,115 +226,136 @@ The model logs a generated sample every 5 epochs. Each is assessed for spelling,
 
 ---
 
-#### Epoch 5 — Avg Loss: 4.5096
+#### Epoch 5 — Avg Loss: 5.5371 | Val Loss: 5.6604
 
-> *"The becoming from, came back at the redished at the flower spone. Watelevia said the man was too good to help her hand, but he knew it was important to try it a mainfly, and go back to the kitchen every day.*
-> *--- Story 5529 --- Once upon a time, there was a"*
+> *"The  Scarecrow were himing when we and they<UNK> said;<UNK>Epation<UNK>He and"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ❌ `redished`, `spone`, `Watelevia`, `mainfly` — corrupted BPE blend tokens |
-| **Grammar** | ❌ *"The becoming from, came back"* — incoherent clause; double preposition *"at the redished at"* |
-| **Semantics** | ❌ Very low. First sentence is meaningless. Second has narrative intent but no logic. |
-| **What was learned** | Story separator format (`--- Story N ---`) and the opening formula `Once upon a time, there was a` are reliable. |
+| **Spelling** | ❌ `himing` (corrupted "humming"/"having"), `Epation` (corrupted BPE subword segments) |
+| **Grammar** | ❌ *"The Scarecrow were"* — subject-verb agreement mismatch |
+| **Semantics** | ❌ Very low. Fragmented phrases with `<UNK>` tokens. |
+| **What was learned** | Basic spacing, punctuation, and character names (`Scarecrow`). |
 
 ---
 
-#### Epoch 10 — Avg Loss: 3.6466
+---
 
-> *"The bunny knew she had to be brave and independ.*
-> *--- Story 798 --- Lila and Tom. Sweety was so kind. "Okay, mommy. It looks at our mom. And you we're not nice." The bear smiled and said, "I love you with your favorite food has been more fun. Thank"*
+#### Epoch 10 — Avg Loss: 4.7824 | Val Loss: 5.0171
+
+> *"The ident to worksestated-night, who seemed on the dot--aly, I am my words toly, and and we had one is and an hour. <UNK>and a light of his goose the Mreation,"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ⚠️ `independ` (truncated "independent"); all other words correctly spelled |
-| **Grammar** | ⚠️ *"brave and independ"* — part-of-speech mismatch; *"I love you with your favorite food has been..."* — run-on, broken clause |
-| **Semantics** | ⚠️ Medium-Low. Named characters (`Lila`, `Tom`) appear. Dialogue is correctly quoted. Story-ending phrase (`Thank...`) emerges. |
-| **What was learned** | Dialogue formatting with quotation marks is now reliable. Emotional vocabulary (`kind`, `brave`, `nice`) and character pronouns are stable. |
+| **Spelling** | ❌ `ident`, `worksestated`, `aly`, `toly`, `Mreation` — subword merge boundary errors |
+| **Grammar** | ❌ Double conjunctions (`and and`) and run-ons |
+| **Semantics** | ⚠️ Low. Real English words are forming (`words`, `hour`, `light`, `goose`), but meaning is fragmented. |
+| **What was learned** | Direct quotes, basic comma placements, and word boundaries. |
 
 ---
 
-#### Epoch 15 — Avg Loss: 3.2434
+---
 
-> *"The magical fairy came to a special gifted for their creative. She invited to make a wishes come in to help dry them rescutting down the old leave. It was good friends and cookies they could find another delicious snack. They found the perfect drin. It was a big delicious that big cookies"*
+#### Epoch 15 — Avg Loss: 4.2855 | Val Loss: 4.6292
+
+> *"The 9. <UNK> said the night-wayly before Gatsby<UNK>ll and a very sading out to"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ❌ `rescutting` (blend of "rescuing"/"cutting"), `leave` (should be "leaves"), `drin` (truncated "drink") |
-| **Grammar** | ❌ *"make a wishes"* — article-noun mismatch; *"It was good friends"* — subject-verb mismatch; *"came to a special gifted"* — adjective used as noun |
-| **Semantics** | ⚠️ Medium. Strong thematic chains: fairy → wishes → magic; cookies → snack → delicious. But causality between clauses is broken. |
-| **What was learned** | Multi-sentence thematic consistency. Natural sentence-openers (`They found...`, `It was...`). |
+| **Spelling** | ❌ `night-wayly`, `sading` (corrupted "sadly"/"saying") |
+| **Grammar** | ❌ `"The 9."` — digit insertion |
+| **Semantics** | ⚠️ Low-Medium. Learns book character references (`Gatsby`) matching the training corpus. |
+| **What was learned** | Context-specific vocabulary from the fictional library. |
 
 ---
 
-#### Epoch 20 — Avg Loss: 2.9827
+---
 
-> *"The story teaches us that it's important to stay ad and joy to make the world promise, so his promise that to always look around and understanding to be more careful.*
-> *--- Story 3868 --- Once upon a time, there lived a boy called Polly lived in a big tree with lots of courage popping and the wise"*
+#### Epoch 20 — Avg Loss: 4.0179 | Val Loss: 4.4846
+
+> *"The ice-ding it with of his bin his way, wed and. The rain<UNK> said the white parents her over and the Canation."*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ⚠️ `ad` (truncated "glad" or "ahead"); all other words correctly spelled |
-| **Grammar** | ❌ *"stay ad and joy"* — adjective/noun mismatch; *"a boy called Polly lived"* — double verb, needs relative pronoun "who" |
-| **Semantics** | ✅ High. Generates a **meta-narrative moral conclusion** (*"The story teaches us..."*) — a structural feature of children's stories. Abstract nouns (`courage`, `understanding`, `promise`) used in correct context. |
-| **What was learned** | Discourse structure: the model understands stories end with moral lessons. Story transitions are perfectly placed. |
+| **Spelling** | ❌ `ice-ding` (corrupted "icing"/"deciding"), `Canation` (corrupted "carnation"/"nation") |
+| **Grammar** | ⚠️ Sentence punctuation is complete. Correct Subject-Verb-Object structures (`The rain said the white parents...`). |
+| **Semantics** | ⚠️ Medium. Grammatically structured clauses, but semantically nonsensical. |
+| **What was learned** | Capitalization at sentence boundaries and sentence structure. |
 
 ---
 
-#### Epoch 25 — Avg Loss: 2.7901
+---
 
-> *"The dragon is safe and sound. Little girl never came from the designs an exhauff gether. Thes them out and makes beautiful lights so happy. You are beautiful!"*
-> *One day, the quarreward. She likes to show her the new dog"*
+#### Epoch 25 — Avg Loss: 3.8284 | Val Loss: 4.3997
+
+> *"The iorons! <UNK>And when it hadn<UNK>t the other the Des of my soupyes, she was"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ❌ `exhauff` (corrupted token), `gether` (truncated "together"), `Thes` (truncated "These"), `quarreward` (corrupted blend) |
-| **Grammar** | ❌ *"Little girl"* — missing article; *"Thes them out"* — missing subject |
-| **Semantics** | ✅ High on isolated phrases. *"The dragon is safe and sound"* — perfect. *"You are beautiful!"* — correct exclamation. *"One day..."* — correct narrative transition. |
-| **What was learned** | Individual short sentences are now grammatically and semantically complete. Errors are at clause *junctions* rather than within sentences. |
+| **Spelling** | ❌ `iorons` (corrupted "irons"/"morons"), `soupyes` (corrupted BPE segment) |
+| **Grammar** | ✅ Exclamations and contractions (`hadn't`). Correct pronoun alignment (`she was`). |
+| **Semantics** | ⚠️ Medium. Short phrases are starting to make sense in isolation (`And when it hadn't the other`, `she was`). |
+| **What was learned** | Contractions and punctuation marks. |
 
 ---
 
-#### Epoch 30 — Avg Loss: 2.6330
+---
 
-> *"The wind in return. We should always been careful to make sure cannot have a purple end time keeping new things and her new sheet as far away. The end.*
-> *--- Story 565 --- Once upon a time, there was a boy named Tom. Do not destroyed all the times, but you don't give him."*
-> *Mom was very"*
+#### Epoch 30 — Avg Loss: 3.6818 | Val Loss: 4.3738
+
+> *"The iery lourdequence had been patch, with its shoopedry tyes; she died, if it were to a low, and a flamingoid the chausters!"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ✅ All words correctly spelled |
-| **Grammar** | ⚠️ *"always been careful"* — missing auxiliary "have"; *"Do not destroyed"* — incorrect infinitive form ("Do not destroy"); *"cannot have a purple end time"* — incoherent noun phrase |
-| **Semantics** | ✅ Strong. *"The end."* is a learned story-closing convention. *"Once upon a time, there was a boy named Tom"* — perfectly formed opening. Dialogue attribution (*Mom was very...*) used correctly. |
-| **What was learned** | Story structural bookends (`The end.`, `Once upon a time...`) are now fluent. Common character names (`Tom`) and family roles (`Mom`) appear naturally. |
+| **Spelling** | ❌ `iery` (corrupted "fiery"), `lourdequence` (corrupted "eloquence"), `shoopedry`, `tyes` (archaic/corrupted "eyes"), `flamingoid` (corrupted "flaming"), `chausters` (corrupted "characters") |
+| **Grammar** | ⚠️ Complex semicolon and clause separation |
+| **Semantics** | ⚠️ Medium-High. Captures the dark, tragic tone of Gothic literature (*Dracula*, *Jane Eyre*): *"she died, if it were to a low..."* |
+| **What was learned** | Genre-specific vocabulary, tone, and archaic text structures. |
 
 ---
 
-#### Epoch 35 — Avg Loss: 2.5014
+---
 
-> *"The special sparkly is a special hole. This is a special moment thing that is a special tide tree.*
-> *--- Story 80 --- Anna and Ben are even and they wanted somethose to read the teacher. Anna wants to use the envin to open the book together. Ben found"*
+#### Epoch 35 — Avg Loss: 3.5610 | Val Loss: 4.3553 *(Best Checkpoint)*
+
+> *"The ice: so then.or Boot Tognomyspyoushibited twenty pieces in heroberway."*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ❌ `somethose` (corrupted "something"/"those"), `envin` (corrupted token, likely "invention" or "envelope") |
-| **Grammar** | ⚠️ *"Anna and Ben are even"* — non-idiomatic; *"wanted somethose to read the teacher"* — object confusion (should be "the teacher to read") |
-| **Semantics** | ⚠️ Medium. Heavy repetition of the word "special" (4× in two sentences) suggests the token probability is over-weighted. Named characters (`Anna`, `Ben`) appear in consistent roles across clauses. Collaborative narrative (`open the book together`) is semantically correct. |
-| **What was learned** | Two characters with distinct names interacting in one scene. Collaborative action verbs (`open together`, `wanted to read`) are used coherently. |
+| **Spelling** | ❌ `Tognomyspyoushibited`, `heroberway` (BPE word combinations) |
+| **Grammar** | ❌ Truncated word boundaries and punctuation spacing issues |
+| **Semantics** | ❌ Low |
+| **What was learned** | Number concepts (`twenty pieces`). |
 
 ---
 
-#### Epoch 40 — Avg Loss: 2.3866 *(Final)*
+---
 
-> *"The bad man saw her and make loud noises. They were scared. They also had never trouble idey for the night.*
-> *--- Story 445 --- Once upon a time, there was a furry ef quien candy said, "Let's go home now." So the family went home and packed some food some vegetables. The gardener said thank you"*
+#### Epoch 40 — Avg Loss: 3.4597 | Val Loss: 4.3658
+
+> *"The ock theolves, that I came over!<UNK> <UNK>What is!<UNK> said Gatsby,"*
 
 | Dimension | Assessment |
 | :--- | :--- |
-| **Spelling** | ❌ `idey` (corrupted token, likely "idea" or "indeed"); `ef quien` (corrupted tokens from mixed-language BPE blends) |
-| **Grammar** | ⚠️ *"make loud noises"* — missing subject agreement ("makes"); *"packed some food some vegetables"* — missing conjunction ("food and some vegetables") |
-| **Semantics** | ✅ High. *"The bad man saw her and make loud noises. They were scared."* — causally coherent micro-narrative. *"Let's go home now"* — socially appropriate dialogue. *"The gardener said thank you"* — semantically logical scene closure. |
-| **What was learned** | Causal micro-narratives (action → consequence). Scene changes and character roles (`gardener`, `family`) are contextually appropriate. Polite conversational closings learned. |
+| **Spelling** | ❌ `theolves` (corrupted "themselves") |
+| **Grammar** | ✅ Correct conversational formatting with quotation marks and attribution (`said Gatsby`) |
+| **Semantics** | ✅ High. Captures character dialogue and references directly from *The Great Gatsby*. |
+| **What was learned** | Dialogue attribution and conversational turn-taking. |
+
+---
+
+---
+
+#### Epoch 45 — Avg Loss: 3.3747 | Val Loss: 4.3700 *(Final Model)*
+
+> *"The ice of book used the Bovent Garden and had gone, she does it with its ferval to it a pair of the heads round the eyes were shuffled in its wrecous boxes. C"*
+
+| Dimension | Assessment |
+| :--- | :--- |
+| **Spelling** | ⚠️ `Bovent` (for "Covent"), `ferval` (for "fervor"), `wrecous` (for "wrecked"/"precious") |
+| **Grammar** | ✅ High. A fully grammatically structured, complex sentence: *"she does it with its [fervor] to it a pair of the heads round the eyes were shuffled in its [precious] boxes."* |
+| **Semantics** | ✅ High. Very close to real prose. Captures the descriptive style of Victorian literature. |
+| **What was learned** | Handling long-range syntax, prepositional phrases, and multi-clause coherence. |
 
 ---
 
@@ -341,12 +365,10 @@ The model logs a generated sample every 5 epochs. Each is assessed for spelling,
 | :--- | :---: | :--- |
 | **Orthography** | 1–5 | Word spelling stabilises; BPE tokens decoded correctly |
 | **Punctuation** | 5–10 | Quotation marks, full stops, commas placed correctly |
-| **Named Characters** | 10–15 | Character names (`Lila`, `Tom`, `Anna`, `Ben`) and pronouns used consistently |
+| **Named Characters** | 10–15 | Character names (`Gatsby`, `Scarecrow`) and pronouns used consistently |
 | **Thematic Chaining** | 15–20 | Words linked by topic across sentences: fairy → wishes → magic |
-| **Discourse Structure** | 20–25 | Story openings, separators (`--- Story N ---`), and moral conclusions all learned |
-| **Short-Sentence Coherence** | 25–30 | Individual sentences grammatically and semantically complete |
-| **Causal Micro-Narratives** | 30–40 | Action → consequence chains: *"The bad man made noise. They were scared."* |
+| **Discourse Structure** | 20–25 | Sentence boundaries, capitalization, and paragraph spacing |
+| **Stylistic Capture** | 25–35 | Genre-specific vocabulary, tone, and archaic text structures (*Dracula*, *Jane Eyre*) |
+| **Causal Dialogue** | 35–45 | Dialogue attribution, quotation marks, and multi-clause coherence |
 
-The primary remaining weakness at Epoch 40 is **inter-clause coherence** and occasional **BPE token corruption** at word boundaries (e.g., `ef quien`, `idey`). Within individual sentences the model is largely fluent; failures occur at transitions between clauses or when uncommon token combinations are sampled.
-
-
+The primary remaining weakness at Epoch 45 is **inter-clause coherence** and occasional **BPE token corruption** at word boundaries. Within individual sentences the model is largely fluent; failures occur at transitions between clauses or when uncommon token combinations are sampled.
