@@ -5,7 +5,7 @@ ifeq ($(NVCC),)
 NVCC = nvcc
 endif
 CFLAGS = -O3 -shared -fPIC -Wall -Wextra
-NVCCFLAGS = -O3 --shared -Xcompiler -fPIC -DUSE_CUDA -ccbin g++-9
+NVCCFLAGS = -O3 --shared -Xcompiler -fPIC -DUSE_CUDA -lcublas -ccbin g++-9
 TARGET = ../../../libwords_cuda.so
 
 .PHONY: all mock cuda clean

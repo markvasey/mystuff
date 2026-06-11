@@ -6,6 +6,7 @@
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #define TILE_WIDTH 16
 
@@ -450,23 +451,49 @@ int cuda_memcpy_to_host(void* dest, const void* src, size_t size) {
 
 // --- GPU Wrapper Launchers ---
 
+static cublasHandle_t cublas_handle = NULL;
+
 int cuda_matrix_multiply(const float* a, const float* b, float* c,
                          int M, int N, int K,
                          int trans_a, int trans_b) {
-    if (trans_a == 0 && trans_b == 0) {
-        dim3 threadsPerBlock(TILE_WIDTH, TILE_WIDTH);
-        dim3 numBlocks((N + TILE_WIDTH - 1) / TILE_WIDTH,
-                       (M + TILE_WIDTH - 1) / TILE_WIDTH);
-        matmul_shared_kernel<<<numBlocks, threadsPerBlock>>>(a, b, c, M, N, K);
-    } else {
-        dim3 threadsPerBlock(16, 16);
-        dim3 numBlocks((N + threadsPerBlock.x - 1) / threadsPerBlock.x,
-                       (M + threadsPerBlock.y - 1) / threadsPerBlock.y);
-        matmul_kernel<<<numBlocks, threadsPerBlock>>>(a, b, c, M, N, K, trans_a, trans_b);
+    if (cublas_handle == NULL) {
+        cublasStatus_t status = cublasCreate(&cublas_handle);
+        if (status != CUBLAS_STATUS_SUCCESS) {
+            fprintf(stderr, "cublasCreate failed with status %d\n", status);
+            return (int)status;
+        }
     }
+
+    float alpha = 1.0f;
+    float beta = 0.0f;
+
+    cublasOperation_t transa_cublas = trans_b ? CUBLAS_OP_T : CUBLAS_OP_N;
+    cublasOperation_t transb_cublas = trans_a ? CUBLAS_OP_T : CUBLAS_OP_N;
+
+    int lda = trans_b ? K : N;
+    int ldb = trans_a ? M : K;
+
+    // Call cuBLAS SGEMM (handles all transpose combinations optimally using Tensor Cores)
+    cublasStatus_t status = cublasSgemm(
+        cublas_handle,
+        transa_cublas,
+        transb_cublas,
+        N, M, K,
+        &alpha,
+        b, lda,
+        a, ldb,
+        &beta,
+        c, N
+    );
+
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        fprintf(stderr, "cublasSgemm failed with status %d\n", status);
+        return (int)status;
+    }
+
     cudaError_t err = cudaDeviceSynchronize();
     if (err != cudaSuccess) {
-        fprintf(stderr, "cuda_matrix_multiply failed: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "cuda_matrix_multiply failed to synchronize: %s\n", cudaGetErrorString(err));
         return (int)err;
     }
     return 0;

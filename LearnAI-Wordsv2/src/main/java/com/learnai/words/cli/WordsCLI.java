@@ -125,7 +125,7 @@ public class WordsCLI {
                 List<SequencePair> shuffledBatch = new ArrayList<>(trainingBatch);
                 java.util.Collections.shuffle(shuffledBatch);
 
-                int trainBatchSize = Integer.getInteger("batch.size.train", 128);
+                int trainBatchSize = Integer.getInteger("batch.size.train", 512);
                 int numBatches = (totalSequences + trainBatchSize - 1) / trainBatchSize;
 
                 for (int b = 0; b < numBatches; b++) {
