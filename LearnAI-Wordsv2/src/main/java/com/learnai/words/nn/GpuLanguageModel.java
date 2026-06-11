@@ -69,8 +69,8 @@ public class GpuLanguageModel implements AutoCloseable {
         this.embedding = new GpuEmbeddingLayer(vocabSize, d_model);
         this.positional = new GpuPositionalEncoding(maxLen, d_model);
         
-        // 3 Transformer Blocks
-        for (int i = 0; i < 3; i++) {
+        // 4 Transformer Blocks
+        for (int i = 0; i < 4; i++) {
             layers.add(new GpuLayerNorm(d_model));
             layers.add(new GpuResidualBlock(new GpuCausalSelfAttentionLayer(d_model, maxLen)));
             layers.add(new GpuLayerNorm(d_model));
@@ -170,6 +170,38 @@ public class GpuLanguageModel implements AutoCloseable {
             return loss;
         }
     }
+
+    /**
+     * Forward pass only — no backward pass, no weight updates.
+     * Used for computing validation loss without affecting model parameters.
+     */
+    public float evaluate(int[] tokenIds, int[] targetIds) {
+        try (ModelForwardResult fwd = forward(tokenIds)) {
+            GpuMatrix probs = fwd.finalProbs;
+            int seqLen = tokenIds.length;
+            int vocabSize = probs.getCols();
+
+            int B = targetIds.length;
+            int T = seqLen / B;
+
+            int[] targets = new int[seqLen];
+            for (int b = 0; b < B; b++) {
+                int offset = b * T;
+                for (int i = 0; i < T - 1; i++) {
+                    targets[offset + i] = tokenIds[offset + i + 1];
+                }
+                targets[offset + T - 1] = targetIds[b];
+            }
+
+            // Compute loss using a temporary gradient buffer (discarded immediately — no backward)
+            GpuMatrix gradient = new GpuMatrix(seqLen, vocabSize);
+            float loss = com.learnai.words.math.CudaBridge.cudaSoftmaxBackwardLossClip(probs, targets, gradient);
+            gradient.close();
+            return loss;
+        }
+    }
+
+
 
     public void save(String path) throws IOException {
         try (java.io.DataOutputStream dos = new java.io.DataOutputStream(new java.io.FileOutputStream(path))) {
