@@ -17,7 +17,8 @@ public class SemanticProbe {
         BPETokenizer tokenizer = new BPETokenizer();
         tokenizer.load("tokenizer.bin");
         
-        LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), 192, 128);
+        int dModel = Integer.getInteger("d.model", 128);
+        LanguageModel model = new LanguageModel(tokenizer.getVocabSize(), dModel, 128);
         model.load("model.bin");
 
         // Use reflection to grab the embedding matrix (since it's private)

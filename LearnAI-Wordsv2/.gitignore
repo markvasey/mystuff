@@ -49,6 +49,8 @@ Thumbs.db
 .mvn/wrapper/maven-wrapper.jar
 
 model.bin
+model_double.bin
+model_old.bin
 tokenizer.bin
 
 Models/
