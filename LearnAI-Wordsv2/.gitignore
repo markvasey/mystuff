@@ -56,5 +56,6 @@ tokenizer.bin
 Models/
 Training/TinyStories/100_children_stories.txt
 Training/TinyStories/1000_children_stories.txt
+Training/TinyStories/5000_children_stories.txt
 *.so
 
