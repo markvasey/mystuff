@@ -13,6 +13,7 @@ It is designed as a "glass box" for students and engineers to see exactly how mo
 - **Thunderbolt Bottleneck Solution**: Fuses target generation, softmax backward gradients, cross-entropy loss computation, and global gradient clipping into a single joint GPU kernel (`cuda_softmax_backward_loss_clip`), eliminating host-to-device VRAM copies.
 - **VRAM Memory Leak Protection**: Uses Java `Cleaner` and `AutoCloseable` wrappers to manage native off-heap memory lifetimes cleanly, preventing GPU Out-of-Memory crashes.
 - **Deterministic Batch Training**: Employs sequential mini-batch training (batch size 512) to achieve high GPU utilization without CPU Hogwild synchronization noise.
+- **Validation Split & Early Stopping**: Splits dataset 90% train / 10% validation, running periodic evaluation passes (every 5 epochs) on the GPU using a forward-only pass. Automatically halts training early if validation loss fails to improve twice consecutively to prevent overfitting.
 - **Subword BPE Tokenizer**: Groups common characters into subword tokens using Byte Pair Encoding ([BPETokenizer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/tokenizer/BPETokenizer.java)).
 - **Interactive Prompting CLI**: A dedicated CLI ([PromptCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/cli/PromptCLI.java)) to load weights and prompt the model interactively on the GPU.
 
@@ -55,31 +56,31 @@ try (ModelForwardResult fwd = forward(tokenIds)) {
 
 In standard AI terminology, when a model's size is quoted (for example, Llama-3-8B has 8 billion parameters), it refers exclusively to the **active weights and biases** used in the forward pass, and does *not* include the optimizer states. 
 
-Under this definition, **this model is a 2.92M parameter model** (specifically, **2,924,800** active parameters, or **2,892,032** parameters if strictly excluding the static, non-trainable positional encoding matrix).
+Under this definition, **this model is a 3.22M parameter model** (specifically, **3,220,992** active parameters, or **3,155,456** parameters if strictly excluding the static, non-trainable positional encoding matrix).
 
-For a configuration with $d_{model} = 256$, $block\_size = 128$, and $vocab\_size = 4,096$:
+For a configuration with $d_{model} = 256$, $block\_size = 256$, and $vocab\_size = 4,096$:
 
-*   **Active/Trainable Model Parameters (AI Metric)**: **2,924,800** ($\sim 2.92\text{M}$ weights and biases), occupying **11.70 MB** of float32 memory.
-*   **Adam Optimizer State Parameters**: **5,784,064** ($\sim 5.78\text{M}$ states for $m$ and $v$ vectors), occupying **23.14 MB** of float32 memory.
-*   **Total Saved File Size (`model.bin`)**: **34.8 MB** (34,836,368 bytes).
+*   **Active/Trainable Model Parameters (AI Metric)**: **3,220,992** ($\sim 3.22\text{M}$ weights and biases), occupying **12.88 MB** of float32 memory.
+*   **Adam Optimizer State Parameters**: **6,310,912** ($\sim 6.31\text{M}$ states for $m$ and $v$ vectors), occupying **25.24 MB** of float32 memory.
+*   **Total Saved File Size (`model.bin`)**: **38.1 MB** (38,128,780 bytes).
 
 ### Parameter Count Details
 
 | Component | Matrix Dimensions | Weight/Bias Parameters | Adam State Parameters ($m$ and $v$) |
 | :--- | :---: | :---: | :---: |
 | **Token Embeddings** | $4,096 \times 256$ | 1,048,576 | 2,097,152 |
-| **Positional Encoding** | $128 \times 256$ | 32,768 (static) | 0 |
-| **7x LayerNorm Layers** | $7 \times (1 \times 256)$ gain, bias | 3,584 | 7,168 |
-| **3x Self-Attention Blocks** | $3 \times (3 \times 256 \times 256)$ query/key/value | 589,824 | 1,179,648 |
-| **3x Feed-Forward Layers** | $3 \times (256 \times 256 + 1 \times 256)$ weights/bias | 197,376 | 394,752 |
+| **Positional Encoding** | $256 \times 256$ | 65,536 (static) | 0 |
+| **9x LayerNorm Layers** | $9 \times (1 \times 256)$ gain, bias | 4,608 | 9,216 |
+| **4x Self-Attention Blocks** | $4 \times (3 \times 256 \times 256)$ query/key/value | 786,432 | 1,572,864 |
+| **4x Feed-Forward Layers** | $4 \times (256 \times 256 + 1 \times 256)$ weights/bias | 263,168 | 526,336 |
 | **Output Language Model Head** | $256 \times 4,096 + 1 \times 4,096$ weights/bias | 1,052,672 | 2,105,344 |
-| **Total** | | **2,924,800** | **5,784,064** |
+| **Total** | | **3,220,992** | **6,310,912** |
 
 ### File Serialization Structure
 
 When saved to `model.bin`, the weights and Adam optimizer states are serialized as raw 32-bit floats. The total file size consists of:
-1. **Float Data**: $(2,924,800 + 5,784,064) \times 4\text{ bytes} = 34,835,456\text{ bytes}$ ($\sim 34.83\text{ MB}$).
-2. **Metadata Headers**: $912\text{ bytes}$ (epoch counts, layer counts, and matrix dimension prefixes).
+1. **Float Data**: $(3,220,992 + 6,310,912) \times 4\text{ bytes} = 38,127,616\text{ bytes}$ ($\sim 38.13\text{ MB}$).
+2. **Metadata Headers**: $1,164\text{ bytes}$ (epoch counts, layer counts, and matrix dimension prefixes).
 
 ---
 
@@ -128,7 +129,7 @@ Loads the trained tokenizer and model weights to prompt the LLM:
     *   *Mechanics:* Links Java `MethodHandle` calls to native symbols inside `libwords_cuda.so` using `java.lang.foreign`. Handles data array marshaling between CPU RAM and GPU VRAM.
 *   **[WordsCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/cli/WordsCLI.java)**:
     *   *Role:* The training loop runner.
-    *   *Mechanics:* Prepares and shuffles sequence pairs, bundles them into flat batches of size 512, runs training epochs, and periodically saves checkpoints.
+    *   *Mechanics:* Splits the tokenized corpus into a 90% training split and a 10% validation split. Prepares and shuffles sequence pairs, bundles them into flat batches of size 512, runs training epochs, runs forward-only validation checks every 5 epochs, and terminates the run early (patience of 2) if validation loss starts rising to prevent overfitting. Saves the best model checkpoint.
 *   **[PromptCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/cli/PromptCLI.java)**:
     *   *Role:* Interactive generation terminal.
     *   *Mechanics:* Loads `model.bin`, takes user prompts, and generates text using a temperature-scaled auto-regressive loop.
@@ -141,7 +142,7 @@ Loads the trained tokenizer and model weights to prompt the LLM:
 ### 3. Neural Network Layers
 *   **[GpuLanguageModel.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/nn/GpuLanguageModel.java)**:
     *   *Role:* Model pipeline backbone.
-    *   *Mechanics:* Orchestrates forward/backward GPU execution flow. Returns a `ModelForwardResult` to enforce VRAM garbage collection.
+    *   *Mechanics:* Orchestrates forward/backward GPU execution flow for training. Implements an `evaluate` method for running forward-only passes (calculating cross-entropy validation loss without backpropagating gradients or updating weights). Returns a `ModelForwardResult` to enforce VRAM garbage collection.
 *   **[GpuEmbeddingLayer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv2/src/main/java/com/learnai/words/nn/GpuEmbeddingLayer.java)**:
     *   *Role:* Token embedding layer.
     *   *Mechanics:* Looks up embedding coordinates and backpropagates input gradients using custom embedding CUDA kernels.
