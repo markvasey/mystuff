@@ -13,19 +13,55 @@ public class GpuLanguageModel implements AutoCloseable {
     private final GpuSoftmaxLayer softmax = new GpuSoftmaxLayer();
     private int completedEpochs = 0;
 
-    private static class ModelForwardResult {
+    private static class ModelForwardResult implements AutoCloseable {
         public final GpuMatrix finalProbs;
         public final List<Object> layerContexts;
         public final Object embeddingContext;
         public final Object positionalContext;
+        public final Object softmaxContext;
         public final GpuMatrix[] activations;
 
-        public ModelForwardResult(GpuMatrix finalProbs, List<Object> layerContexts, Object embeddingContext, Object positionalContext, GpuMatrix[] activations) {
+        public ModelForwardResult(GpuMatrix finalProbs, List<Object> layerContexts, Object embeddingContext, Object positionalContext, Object softmaxContext, GpuMatrix[] activations) {
             this.finalProbs = finalProbs;
             this.layerContexts = layerContexts;
             this.embeddingContext = embeddingContext;
             this.positionalContext = positionalContext;
+            this.softmaxContext = softmaxContext;
             this.activations = activations;
+        }
+
+        @Override
+        public void close() {
+            if (finalProbs != null) {
+                finalProbs.close();
+            }
+            if (activations != null) {
+                for (int i = 0; i < activations.length; i++) {
+                    if (activations[i] != null) {
+                        activations[i].close();
+                        activations[i] = null;
+                    }
+                }
+            }
+            if (layerContexts != null) {
+                for (Object ctx : layerContexts) {
+                    if (ctx instanceof AutoCloseable) {
+                        try {
+                            ((AutoCloseable) ctx).close();
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }
+                layerContexts.clear();
+            }
+            if (softmaxContext instanceof AutoCloseable) {
+                try {
+                    ((AutoCloseable) softmaxContext).close();
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
         }
     }
 
@@ -50,10 +86,9 @@ public class GpuLanguageModel implements AutoCloseable {
     public void setCompletedEpochs(int n) { this.completedEpochs = n; }
 
     public Matrix predict(int[] tokenIds) {
-        ModelForwardResult fwd = forward(tokenIds);
-        Matrix cpuProbs = fwd.finalProbs.toCpu();
-        fwd.finalProbs.close();
-        return cpuProbs;
+        try (ModelForwardResult fwd = forward(tokenIds)) {
+            return fwd.finalProbs.toCpu();
+        }
     }
 
     private ModelForwardResult forward(int[] tokenIds) {
@@ -76,8 +111,9 @@ public class GpuLanguageModel implements AutoCloseable {
         
         GpuLayer.GpuForwardResult softRes = softmax.forward(activations[layers.size()]);
         activations[layers.size()].close();
+        activations[layers.size()] = null;
         
-        return new ModelForwardResult(softRes.output, contexts, embRes.context, posRes.context, activations);
+        return new ModelForwardResult(softRes.output, contexts, embRes.context, posRes.context, softRes.context, activations);
     }
 
     public float train(int[] tokenIds, int targetId, float learningRate) {
@@ -85,87 +121,54 @@ public class GpuLanguageModel implements AutoCloseable {
     }
 
     public float train(int[] tokenIds, int[] targetIds, float learningRate) {
-        ModelForwardResult fwd = forward(tokenIds);
-        GpuMatrix probs = fwd.finalProbs;
-        int seqLen = tokenIds.length;
-        int vocabSize = probs.getCols();
+        try (ModelForwardResult fwd = forward(tokenIds)) {
+            GpuMatrix probs = fwd.finalProbs;
+            int seqLen = tokenIds.length;
+            int vocabSize = probs.getCols();
 
-        int B = targetIds.length;
-        int T = seqLen / B;
+            int B = targetIds.length;
+            int T = seqLen / B;
 
-        // Download probs to calculate loss and build the target distribution
-        float[] probsData = new float[seqLen * vocabSize];
-        probs.download(probsData);
-
-        float loss = 0.0f;
-        Matrix cpuTarget = new Matrix(seqLen, vocabSize);
-        for (int b = 0; b < B; b++) {
-            int offset = b * T;
-            for (int i = 0; i < T - 1; i++) {
-                int nextTokenId = tokenIds[offset + i + 1];
-                float prob = Math.clamp(probsData[(offset + i) * vocabSize + nextTokenId], 1e-12f, 1.0f);
-                loss += (float) -Math.log(prob);
-                cpuTarget.set(offset + i, nextTokenId, 1.0f);
+            // Construct target token index array for GPU side loss and backward calculation
+            int[] targets = new int[seqLen];
+            for (int b = 0; b < B; b++) {
+                int offset = b * T;
+                for (int i = 0; i < T - 1; i++) {
+                    targets[offset + i] = tokenIds[offset + i + 1];
+                }
+                targets[offset + T - 1] = targetIds[b];
             }
-            int targetId = targetIds[b];
-            float finalProb = Math.clamp(probsData[(offset + T - 1) * vocabSize + targetId], 1e-12f, 1.0f);
-            loss += (float) -Math.log(finalProb);
-            cpuTarget.set(offset + T - 1, targetId, 1.0f);
-        }
-        loss /= seqLen;
 
-        GpuMatrix target = GpuMatrix.fromCpu(cpuTarget);
-        GpuMatrix gradient = softmax.backward(target, fwd.finalProbs, learningRate);
-        target.close();
+            // Allocate gradient directly on device
+            GpuMatrix gradient = new GpuMatrix(seqLen, vocabSize);
 
-        // Download gradient data to perform scaling and global norm clipping on CPU
-        float[] gData = new float[seqLen * vocabSize];
-        gradient.download(gData);
+            // Perform softmax backward, loss computation, and global norm clipping entirely on the GPU
+            float loss = com.learnai.words.math.CudaBridge.cudaSoftmaxBackwardLossClip(probs, targets, gradient);
 
-        float scale = 1.0f / seqLen;
-        for (int i = 0; i < gData.length; i++) {
-            gData[i] *= scale;
-        }
-
-        // Global Gradient Clipping norm (RMS of first sequence position's predictions)
-        float sumSq = 0.0f;
-        for (int j = 0; j < vocabSize; j++) {
-            float val = gData[j];
-            sumSq += val * val;
-        }
-        float norm = (float) Math.sqrt(sumSq / vocabSize);
-
-        if (norm > 1.0f) {
-            float clipScale = 1.0f / norm;
-            for (int i = 0; i < gData.length; i++) {
-                gData[i] *= clipScale;
+            GpuMatrix currentGradient = gradient;
+            for (int i = layers.size() - 1; i >= 0; i--) {
+                GpuMatrix nextGrad = layers.get(i).backward(currentGradient, fwd.layerContexts.get(i), learningRate);
+                currentGradient.close();
+                currentGradient = nextGrad;
+                
+                if (fwd.activations[i] != null) {
+                    fwd.activations[i].close();
+                    fwd.activations[i] = null;
+                }
             }
-        }
-
-        gradient.upload(gData);
-
-        GpuMatrix currentGradient = gradient;
-        for (int i = layers.size() - 1; i >= 0; i--) {
-            GpuMatrix nextGrad = layers.get(i).backward(currentGradient, fwd.layerContexts.get(i), learningRate);
-            currentGradient.close();
-            currentGradient = nextGrad;
             
-            if (fwd.activations[i] != null) {
-                fwd.activations[i].close();
+            GpuMatrix posGrad = positional.backward(currentGradient, fwd.positionalContext, learningRate);
+            currentGradient.close();
+            currentGradient = posGrad;
+            
+            GpuMatrix embGrad = embedding.backward(currentGradient, fwd.embeddingContext, learningRate);
+            currentGradient.close();
+            if (embGrad != null) {
+                embGrad.close();
             }
-        }
-        
-        GpuMatrix posGrad = positional.backward(currentGradient, fwd.positionalContext, learningRate);
-        currentGradient.close();
-        currentGradient = posGrad;
-        
-        GpuMatrix embGrad = embedding.backward(currentGradient, fwd.embeddingContext, learningRate);
-        currentGradient.close();
-        if (embGrad != null) {
-            embGrad.close();
-        }
 
-        return loss;
+            return loss;
+        }
     }
 
     public void save(String path) throws IOException {

@@ -15,9 +15,9 @@ public class GpuLayerNorm implements GpuLayer {
     private final float eps = 1e-5f;
 
     private static class LNState implements AutoCloseable {
-        public final GpuMatrix input;
-        public final GpuMatrix xHat;
-        public final GpuMatrix var;
+        public GpuMatrix input;
+        public GpuMatrix xHat;
+        public GpuMatrix var;
         public LNState(GpuMatrix i, GpuMatrix x, GpuMatrix v) {
             this.input = i;
             this.xHat = x;
@@ -25,9 +25,9 @@ public class GpuLayerNorm implements GpuLayer {
         }
         @Override
         public void close() {
-            if (input != null) input.close();
-            if (xHat != null) xHat.close();
-            if (var != null) var.close();
+            if (input != null) { input.close(); input = null; }
+            if (xHat != null) { xHat.close(); xHat = null; }
+            if (var != null) { var.close(); var = null; }
         }
     }
 

@@ -146,15 +146,6 @@ public class WordsCLI {
                     totalLoss.add(loss * currentBatchSize);
                     
                     int count = processed.addAndGet(currentBatchSize);
-                    if (count / 10000 > (count - currentBatchSize) / 10000) {
-                        try {
-                            synchronized(model) { 
-                                model.setCompletedEpochs(currentEpoch - 1);
-                                model.save(modelPath.toString()); 
-                            }
-                            logger.info("Checkpoint saved at {} sequences", count);
-                        } catch (IOException e) { logger.error("Save failed", e); }
-                    }
                 }
 
                 long epochEnd = System.currentTimeMillis();
@@ -163,11 +154,12 @@ public class WordsCLI {
                     epoch, String.format("%.4f", avgLoss), (epochEnd - epochStart) / 1000);
                 
                 model.setCompletedEpochs(epoch);
-                model.save(modelPath.toString());
                 
-                // Generate sample every epoch
-                TextGenerator gen = model.createGenerator(tokenizer, BLOCK_SIZE);
-                logger.info("Sample (Epoch {}): [{}]", epoch, gen.generate("The ", 50));
+                if (epoch == EPOCHS || epoch % 5 == 0) {
+                    model.save(modelPath.toString());
+                    TextGenerator gen = model.createGenerator(tokenizer, BLOCK_SIZE);
+                    logger.info("Sample (Epoch {}): [{}]", epoch, gen.generate("The ", 50));
+                }
             }
         } catch (Exception e) {
             logger.error("Training interrupted", e);

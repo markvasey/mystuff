@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#ifdef USE_CUDA
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
@@ -794,414 +793,119 @@ int cuda_layernorm_backward(const float* output_gradient, const float* x_hat, co
     return 0;
 }
 
-} // extern "C"
-
-#else
-
-// --- CPU Fallback Mocks ---
-
-extern "C" {
-
-void* cuda_malloc(size_t size) {
-    return malloc(size);
-}
-
-void cuda_free(void* ptr) {
-    if (ptr) {
-        free(ptr);
-    }
-}
-
-int cuda_memcpy_to_device(void* dest, const void* src, size_t size) {
-    memcpy(dest, src, size);
-    return 0;
-}
-
-int cuda_memcpy_to_host(void* dest, const void* src, size_t size) {
-    memcpy(dest, src, size);
-    return 0;
-}
-
-int cuda_matrix_multiply(const float* a, const float* b, float* c,
-                         int M, int N, int K,
-                         int trans_a, int trans_b) {
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < N; j++) {
-            float sum = 0.0f;
-            for (int k = 0; k < K; k++) {
-                float val_a = trans_a ? a[k * M + i] : a[i * K + k];
-                float val_b = trans_b ? b[j * K + k] : b[k * N + j];
-                sum += val_a * val_b;
-            }
-            c[i * N + j] = sum;
-        }
-    }
-    return 0;
-}
-
-int cuda_adam_update(float* w, const float* g, float* m, float* v,
-                     int size, float lr, float beta1, float beta2,
-                     float eps, int t) {
-    float bc1 = 1.0f - powf(beta1, t);
-    float bc2 = 1.0f - powf(beta2, t);
-    float oneMinusBeta1 = 1.0f - beta1;
-    float oneMinusBeta2 = 1.0f - beta2;
-
-    for (int i = 0; i < size; i++) {
-        m[i] = beta1 * m[i] + oneMinusBeta1 * g[i];
-        v[i] = beta2 * v[i] + oneMinusBeta2 * g[i] * g[i];
-        float mHat = m[i] / bc1;
-        float vHat = v[i] / bc2;
-        w[i] -= lr * mHat / (sqrtf(vHat) + eps);
-    }
-    return 0;
-}
-
-int cuda_add_in_place(float* a, const float* b, int a_rows, int a_cols, int b_rows, int b_cols) {
-    if (b_rows == 1 && a_rows > 1) { // Broadcasting row vector
-        for (int i = 0; i < a_rows; i++) {
-            int offset = i * a_cols;
-            for (int j = 0; j < a_cols; j++) {
-                a[offset + j] += b[j];
-            }
-        }
-    } else if (b_rows > 1 && a_rows > b_rows) { // Tiling 2D matrix (e.g. pe)
-        int b_size = b_rows * b_cols;
-        int size = a_rows * a_cols;
-        for (int i = 0; i < size; i++) {
-            a[i] += b[i % b_size];
-        }
-    } else { // Direct element-wise
-        int size = a_rows * a_cols;
-        for (int i = 0; i < size; i++) {
-            a[i] += b[i];
-        }
-    }
-    return 0;
-}
-
-int cuda_subtract_in_place(float* a, const float* b, int size) {
-    for (int i = 0; i < size; i++) {
-        a[i] -= b[i];
-    }
-    return 0;
-}
-
-int cuda_multiply_element_wise(const float* a, const float* b, float* r, int size) {
-    for (int i = 0; i < size; i++) {
-        r[i] = a[i] * b[i];
-    }
-    return 0;
-}
-
-int cuda_square(const float* a, float* r, int size) {
-    for (int i = 0; i < size; i++) {
-        r[i] = a[i] * a[i];
-    }
-    return 0;
-}
-
-int cuda_sqrt(const float* a, float* r, int size, float epsilon) {
-    for (int i = 0; i < size; i++) {
-        r[i] = sqrtf(a[i] + epsilon);
-    }
-    return 0;
-}
-
-int cuda_row_mean(const float* a, float* r, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        float sum = 0.0f;
-        int offset = i * cols;
-        for (int j = 0; j < cols; j++) {
-            sum += a[offset + j];
-        }
-        r[i] = sum / cols;
-    }
-    return 0;
-}
-
-int cuda_row_variance(const float* a, const float* mean, float* r, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        float sum_sq = 0.0f;
-        float m = mean[i];
-        int offset = i * cols;
-        for (int j = 0; j < cols; j++) {
-            float diff = a[offset + j] - m;
-            sum_sq += diff * diff;
-        }
-        r[i] = sum_sq / cols;
-    }
-    return 0;
-}
-
-int cuda_transpose(const float* src, float* dest, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            dest[j * rows + i] = src[i * cols + j];
-        }
-    }
-    return 0;
-}
-
-int cuda_embedding_forward(const float* embeddings, const int* token_ids, float* output,
-                           int num_tokens, int embedding_dim) {
-    for (int i = 0; i < num_tokens; i++) {
-        int id = token_ids[i];
-        for (int j = 0; j < embedding_dim; j++) {
-            output[i * embedding_dim + j] = embeddings[id * embedding_dim + j];
-        }
-    }
-    return 0;
-}
-
-int cuda_embedding_backward(const float* output_gradient, const int* token_ids, float* embeddings_gradient,
-                            int num_tokens, int embedding_dim) {
-    for (int i = 0; i < num_tokens; i++) {
-        int id = token_ids[i];
-        for (int j = 0; j < embedding_dim; j++) {
-            embeddings_gradient[id * embedding_dim + j] += output_gradient[i * embedding_dim + j];
-        }
-    }
-    return 0;
-}
-
-int cuda_attention_forward(float* scores, int rows, int cols, float inv_scale) {
-    for (int i = 0; i < rows; i++) {
-        int offset = i * cols;
-        int activeLimit = (i % cols) + 1;
+__global__ void softmax_backward_and_loss_kernel(const float* probs, const int* targets, float* grads, float* loss_elements, int seq_len, int vocab_size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_size = seq_len * vocab_size;
+    if (idx < total_size) {
+        int seq_idx = idx / vocab_size;
+        int vocab_idx = idx % vocab_size;
+        int target = targets[seq_idx];
         
-        float max_val = -1e20f;
-        for (int j = 0; j < activeLimit; j++) {
-            float val = scores[offset + j] * inv_scale;
-            if (val > max_val) max_val = val;
-        }
+        float prob = probs[idx];
+        float clamped_prob = prob;
+        if (clamped_prob < 1e-12f) clamped_prob = 1e-12f;
+        if (clamped_prob > 1.0f) clamped_prob = 1.0f;
         
-        float sum = 0.0f;
-        for (int j = 0; j < activeLimit; j++) {
-            float val = expf(scores[offset + j] * inv_scale - max_val);
-            scores[offset + j] = val;
-            sum += val;
-        }
+        float target_val = (vocab_idx == target) ? 1.0f : 0.0f;
+        grads[idx] = (prob - target_val) / seq_len;
         
-        for (int j = 0; j < activeLimit; j++) {
-            float prob = scores[offset + j] / sum;
-            if (prob < 1e-15f) prob = 1e-15f;
-            if (prob > (1.0f - 1e-15f)) prob = 1.0f - 1e-15f;
-            scores[offset + j] = prob;
-        }
-        
-        for (int j = activeLimit; j < cols; j++) {
-            scores[offset + j] = 1e-15f;
+        if (vocab_idx == target) {
+            loss_elements[seq_idx] = -logf(clamped_prob);
         }
     }
-    return 0;
 }
 
-int cuda_attention_backward(const float* A, const float* dA, float* dS,
-                            int rows, int cols, float scale) {
-    for (int i = 0; i < rows; i++) {
-        int offset = i * cols;
-        int activeLimit = (i % cols) + 1;
-        
-        float dot = 0.0f;
-        for (int k = 0; k < activeLimit; k++) {
-            dot += dA[offset + k] * A[offset + k];
-        }
-        
-        for (int j = 0; j < activeLimit; j++) {
-            dS[offset + j] = A[offset + j] * (dA[offset + j] - dot) * scale;
-        }
-        for (int j = activeLimit; j < cols; j++) {
-            dS[offset + j] = 0.0f;
-        }
+__global__ void sum_loss_kernel(const float* loss_elements, float* loss_out, int seq_len) {
+    __shared__ float cache[256];
+    int tid = threadIdx.x;
+    float sum = 0.0f;
+    for (int i = tid; i < seq_len; i += blockDim.x) {
+        sum += loss_elements[i];
     }
-    return 0;
+    cache[tid] = sum;
+    __syncthreads();
+    
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            cache[tid] += cache[tid + s];
+        }
+        __syncthreads();
+    }
+    
+    if (tid == 0) {
+        *loss_out = cache[0] / seq_len;
+    }
 }
 
-int cuda_attention_q_k_forward(const float* q, const float* k, float* scores, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int q_offset = row * d_model;
-        for (int col = 0; col < T; col++) {
-            int k_offset = (b * T + col) * d_model;
-            float sum = 0.0f;
-            for (int d = 0; d < d_model; d++) {
-                sum += q[q_offset + d] * k[k_offset + d];
-            }
-            scores[row * T + col] = sum;
-        }
+__global__ void compute_norm_kernel(const float* grads, float* dev_norm, int vocab_size) {
+    __shared__ float cache[256];
+    int tid = threadIdx.x;
+    
+    float sumSq = 0.0f;
+    for (int j = tid; j < vocab_size; j += blockDim.x) {
+        float val = grads[j];
+        sumSq += val * val;
     }
-    return 0;
+    cache[tid] = sumSq;
+    __syncthreads();
+    
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            cache[tid] += cache[tid + s];
+        }
+        __syncthreads();
+    }
+    
+    if (tid == 0) {
+        *dev_norm = sqrtf(cache[0] / vocab_size);
+    }
 }
 
-int cuda_attention_out_forward(const float* scores, const float* v, float* output, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int s_offset = row * T;
-        int out_offset = row * d_model;
-        int v_offset = b * T * d_model;
-        for (int d = 0; d < d_model; d++) {
-            float sum = 0.0f;
-            for (int j = 0; j < T; j++) {
-                sum += scores[s_offset + j] * v[v_offset + j * d_model + d];
-            }
-            output[out_offset + d] = sum;
+__global__ void apply_clip_scale_kernel(float* grads, const float* dev_norm, int seq_len, int vocab_size) {
+    float norm = *dev_norm;
+    if (norm > 1.0f) {
+        float clipScale = 1.0f / norm;
+        int total_size = seq_len * vocab_size;
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx < total_size) {
+            grads[idx] *= clipScale;
         }
     }
-    return 0;
 }
 
-int cuda_attention_dv_backward(const float* A, const float* dO, float* dV, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int i = row % T;
-        int dv_offset = row * d_model;
-        int dO_offset = b * T * d_model;
-        for (int d = 0; d < d_model; d++) {
-            float sum = 0.0f;
-            for (int j = 0; j < T; j++) {
-                sum += A[(b * T + j) * T + i] * dO[dO_offset + j * d_model + d];
-            }
-            dV[dv_offset + d] = sum;
-        }
-    }
-    return 0;
-}
-
-int cuda_attention_da_backward(const float* dO, const float* v, float* dA, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int do_offset = row * d_model;
-        int da_offset = row * T;
-        for (int col = 0; col < T; col++) {
-            int v_offset = (b * T + col) * d_model;
-            float sum = 0.0f;
-            for (int d = 0; d < d_model; d++) {
-                sum += dO[do_offset + d] * v[v_offset + d];
-            }
-            dA[da_offset + col] = sum;
-        }
-    }
-    return 0;
-}
-
-int cuda_attention_dq_backward(const float* dS, const float* k, float* dQ, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int ds_offset = row * T;
-        int dq_offset = row * d_model;
-        int k_offset = b * T * d_model;
-        for (int d = 0; d < d_model; d++) {
-            float sum = 0.0f;
-            for (int j = 0; j < T; j++) {
-                sum += dS[ds_offset + j] * k[k_offset + j * d_model + d];
-            }
-            dQ[dq_offset + d] = sum;
-        }
-    }
-    return 0;
-}
-
-int cuda_attention_dk_backward(const float* dS, const float* q, float* dK, int B, int T, int d_model) {
-    for (int row = 0; row < B * T; row++) {
-        int b = row / T;
-        int i = row % T;
-        int dk_offset = row * d_model;
-        int q_offset = b * T * d_model;
-        for (int d = 0; d < d_model; d++) {
-            float sum = 0.0f;
-            for (int j = 0; j < T; j++) {
-                sum += dS[(b * T + j) * T + i] * q[q_offset + j * d_model + d];
-            }
-            dK[dk_offset + d] = sum;
-        }
-    }
-    return 0;
-}
-
-int cuda_softmax_forward(const float* input, float* output, int rows, int cols) {
-    for (int i = 0; i < rows; i++) {
-        int offset = i * cols;
-        float max_val = -1e20f;
-        for (int j = 0; j < cols; j++) {
-            if (input[offset + j] > max_val) max_val = input[offset + j];
-        }
-        
-        float sum = 0.0f;
-        for (int j = 0; j < cols; j++) {
-            float val = expf(input[offset + j] - max_val);
-            output[offset + j] = val;
-            sum += val;
-        }
-        
-        for (int j = 0; j < cols; j++) {
-            float prob = output[offset + j] / sum;
-            if (prob < 1e-15f) prob = 1e-15f;
-            if (prob > (1.0f - 1e-15f)) prob = 1.0f - 1e-15f;
-            output[offset + j] = prob;
-        }
-    }
-    return 0;
-}
-
-int cuda_layernorm_forward(const float* input, const float* gamma, const float* beta,
-                           float* output, float* x_hat, const float* mean, const float* var,
-                           int rows, int cols, float eps) {
-    for (int i = 0; i < rows; i++) {
-        float m = mean[i];
-        float v = var[i];
-        float invStd = 1.0f / sqrtf(v + eps);
-        int offset = i * cols;
-        for (int j = 0; j < cols; j++) {
-            int idx = offset + j;
-            float xh = (input[idx] - m) * invStd;
-            x_hat[idx] = xh;
-            output[idx] = xh * gamma[j] + beta[j];
-        }
-    }
-    return 0;
-}
-
-int cuda_layernorm_backward(const float* output_gradient, const float* x_hat, const float* var,
-                            const float* gamma, float* d_input, float* d_gamma, float* d_beta,
-                            int rows, int cols, float eps) {
-    for (int j = 0; j < cols; j++) {
-        float sum_dg = 0.0f;
-        float sum_db = 0.0f;
-        for (int i = 0; i < rows; i++) {
-            int idx = i * cols + j;
-            sum_dg += output_gradient[idx] * x_hat[idx];
-            sum_db += output_gradient[idx];
-        }
-        d_gamma[j] = sum_dg;
-        d_beta[j] = sum_db;
-    }
-
-    for (int i = 0; i < rows; i++) {
-        float v = var[i];
-        float invStd = 1.0f / sqrtf(v + eps);
-        int offset = i * cols;
-        
-        float dxh_sum = 0.0f;
-        float xh_dxh_sum = 0.0f;
-        for (int j = 0; j < cols; j++) {
-            int idx = offset + j;
-            float dXHat = output_gradient[idx] * gamma[j];
-            dxh_sum += dXHat;
-            xh_dxh_sum += x_hat[idx] * dXHat;
-        }
-        float dxh_mean = dxh_sum / cols;
-        float xh_dxh_mean = xh_dxh_sum / cols;
-        
-        for (int j = 0; j < cols; j++) {
-            int idx = offset + j;
-            float dXHat = output_gradient[idx] * gamma[j];
-            d_input[idx] = invStd * (dXHat - dxh_mean - x_hat[idx] * xh_dxh_mean);
-        }
-    }
+int cuda_softmax_backward_loss_clip(const float* probs, const int* targets, float* grads, float* loss_out, int seq_len, int vocab_size) {
+    float* dev_loss_elements = NULL;
+    float* dev_loss_val = NULL;
+    float* dev_norm = NULL;
+    
+    cudaError_t err;
+    err = cudaMalloc((void**)&dev_loss_elements, seq_len * sizeof(float));
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMalloc((void**)&dev_loss_val, sizeof(float));
+    if (err != cudaSuccess) { cudaFree(dev_loss_elements); return (int)err; }
+    err = cudaMalloc((void**)&dev_norm, sizeof(float));
+    if (err != cudaSuccess) { cudaFree(dev_loss_elements); cudaFree(dev_loss_val); return (int)err; }
+    
+    int total_size = seq_len * vocab_size;
+    int threadsPerBlock = 256;
+    int numBlocks = (total_size + threadsPerBlock - 1) / threadsPerBlock;
+    
+    softmax_backward_and_loss_kernel<<<numBlocks, threadsPerBlock>>>(probs, targets, grads, dev_loss_elements, seq_len, vocab_size);
+    
+    sum_loss_kernel<<<1, 256>>>(dev_loss_elements, dev_loss_val, seq_len);
+    
+    compute_norm_kernel<<<1, 256>>>(grads, dev_norm, vocab_size);
+    
+    apply_clip_scale_kernel<<<numBlocks, threadsPerBlock>>>(grads, dev_norm, seq_len, vocab_size);
+    
+    err = cudaMemcpy(loss_out, dev_loss_val, sizeof(float), cudaMemcpyDeviceToHost);
+    
+    cudaFree(dev_loss_elements);
+    cudaFree(dev_loss_val);
+    cudaFree(dev_norm);
+    
+    if (err != cudaSuccess) return (int)err;
     return 0;
 }
 
 } // extern "C"
-
-#endif

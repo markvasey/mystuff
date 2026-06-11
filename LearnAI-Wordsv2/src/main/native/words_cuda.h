@@ -65,6 +65,9 @@ int cuda_layernorm_backward(const float* output_gradient, const float* x_hat, co
                             const float* gamma, float* d_input, float* d_gamma, float* d_beta,
                             int rows, int cols, float eps);
 
+// Joint Softmax backward, Loss computation, and Gradient clipping on GPU
+int cuda_softmax_backward_loss_clip(const float* probs, const int* targets, float* grads, float* loss_out, int seq_len, int vocab_size);
+
 #ifdef __cplusplus
 }
 #endif

@@ -41,6 +41,7 @@ public class CudaBridge {
     private static final MethodHandle cudaAttentionDABackwardHandle;
     private static final MethodHandle cudaAttentionDQBackwardHandle;
     private static final MethodHandle cudaAttentionDKBackwardHandle;
+    private static final MethodHandle cudaSoftmaxBackwardLossClipHandle;
 
     static {
         // Find the shared library libwords_cuda.so
@@ -351,8 +352,51 @@ public class CudaBridge {
                 )
             );
 
+            cudaSoftmaxBackwardLossClipHandle = LINKER.downcallHandle(
+                LOOKUP.find("cuda_softmax_backward_loss_clip").orElseThrow(() -> new NoSuchMethodError("cuda_softmax_backward_loss_clip")),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS, // probs
+                    ValueLayout.ADDRESS, // targets
+                    ValueLayout.ADDRESS, // grads
+                    ValueLayout.ADDRESS, // loss_out
+                    ValueLayout.JAVA_INT, // seq_len
+                    ValueLayout.JAVA_INT  // vocab_size
+                )
+            );
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize CudaBridge MethodHandles: " + e.getMessage(), e);
+        }
+    }
+
+    public static float cudaSoftmaxBackwardLossClip(GpuMatrix probs, int[] targets, GpuMatrix grads) {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment devTargets = cudaMalloc(targets.length * 4L);
+            try {
+                MemorySegment hostTargets = arena.allocateFrom(ValueLayout.JAVA_INT, targets);
+                cudaMemcpyToDevice(devTargets, hostTargets, targets.length * 4L);
+
+                MemorySegment hostLoss = arena.allocate(ValueLayout.JAVA_FLOAT);
+
+                int err = (int) cudaSoftmaxBackwardLossClipHandle.invokeExact(
+                    probs.getDevicePtr(),
+                    devTargets,
+                    grads.getDevicePtr(),
+                    hostLoss,
+                    targets.length,
+                    probs.getCols()
+                );
+
+                if (err != 0) {
+                    throw new RuntimeException("cuda_softmax_backward_loss_clip failed with error code: " + err);
+                }
+
+                return hostLoss.get(ValueLayout.JAVA_FLOAT, 0);
+            } finally {
+                cudaFree(devTargets);
+            }
+        } catch (Throwable t) {
+            throw new RuntimeException("Error executing cudaSoftmaxBackwardLossClip: " + t.getMessage(), t);
         }
     }
 

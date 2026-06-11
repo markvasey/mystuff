@@ -23,8 +23,8 @@ public class GpuSoftmaxLayer implements GpuLayer {
     @Override
     public GpuMatrix backward(GpuMatrix target, Object context, float learningRate) {
         GpuMatrix lastOutput = (GpuMatrix) context;
-        GpuMatrix gradient = lastOutput.subtract(target); // subtraction creates a new GpuMatrix
-        lastOutput.close(); // Free the cached outputCopy
+        GpuMatrix gradient = lastOutput.subtract(target);
+        lastOutput.close();
         return gradient;
     }
 

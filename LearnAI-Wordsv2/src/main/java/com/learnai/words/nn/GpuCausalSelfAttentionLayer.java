@@ -14,16 +14,16 @@ public class GpuCausalSelfAttentionLayer implements GpuLayer {
     private final int maxLen;
 
     private static class AttentionState implements AutoCloseable {
-        public final GpuMatrix input;
-        public final GpuMatrix attnWeights;
+        public GpuMatrix input;
+        public GpuMatrix attnWeights;
         public AttentionState(GpuMatrix input, GpuMatrix attnWeights) {
             this.input = input;
             this.attnWeights = attnWeights;
         }
         @Override
         public void close() {
-            if (input != null) input.close();
-            if (attnWeights != null) attnWeights.close();
+            if (input != null) { input.close(); input = null; }
+            if (attnWeights != null) { attnWeights.close(); attnWeights = null; }
         }
     }
 
