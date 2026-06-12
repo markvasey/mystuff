@@ -42,6 +42,8 @@ public class ControlPanel extends JPanel {
     private boolean isAutoConnecting = false;
     
     private final Map<String, Map<String, String>> houseData = new LinkedHashMap<>();
+    private String defaultHouse = null;
+    private String defaultCamera = null;
 
     public ControlPanel(VideoPanel videoPanel) {
         this.videoPanel = videoPanel;
@@ -50,6 +52,16 @@ public class ControlPanel extends JPanel {
         loadCameraXml();
         loadSecrets();
         setupCombos();
+
+        // Initialize GPU Decode Checkbox based on NVIDIA GPU presence
+        boolean gpuPresent = isNvidiaGpuPresent();
+        gpuDecodeCheck.setSelected(gpuPresent);
+        gpuDecodeCheck.setEnabled(gpuPresent);
+        if (!gpuPresent) {
+            gpuDecodeCheck.setToolTipText("NVIDIA eGPU not detected. NVDEC is disabled.");
+        } else {
+            gpuDecodeCheck.setToolTipText("Hardware-accelerated video decoding using NVIDIA NVDEC.");
+        }
 
         // Register snapshot listener
         videoPanel.setSnapshotListener(historyPanel::addSnapshot);
@@ -104,6 +116,9 @@ public class ControlPanel extends JPanel {
         
         // Initially disable PTZ until connected
         setPtzEnabled(false, false);
+
+        // Automatically connect on startup
+        SwingUtilities.invokeLater(this::connect);
     }
 
     private void setPtzEnabled(boolean ptzEnabled, boolean zoomEnabled) {
@@ -130,12 +145,19 @@ public class ControlPanel extends JPanel {
             for (int i = 0; i < houseList.getLength(); i++) {
                 Element houseEl = (Element) houseList.item(i);
                 String houseName = houseEl.getAttribute("name");
+                if ("true".equals(houseEl.getAttribute("default"))) {
+                    defaultHouse = houseName;
+                }
                 Map<String, String> cameras = new LinkedHashMap<>();
                 
                 NodeList camList = houseEl.getElementsByTagName("Camera");
                 for (int j = 0; j < camList.getLength(); j++) {
                     Element camEl = (Element) camList.item(j);
-                    cameras.put(camEl.getAttribute("name"), camEl.getAttribute("ip"));
+                    String camName = camEl.getAttribute("name");
+                    cameras.put(camName, camEl.getAttribute("ip"));
+                    if ("true".equals(camEl.getAttribute("default"))) {
+                        defaultCamera = camName;
+                    }
                 }
                 houseData.put(houseName, cameras);
             }
@@ -175,7 +197,12 @@ public class ControlPanel extends JPanel {
             }
         });
 
-        if (houseCombo.getItemCount() > 0) {
+        if (defaultHouse != null && houseData.containsKey(defaultHouse)) {
+            houseCombo.setSelectedItem(defaultHouse);
+            if (defaultCamera != null && houseData.get(defaultHouse).containsKey(defaultCamera)) {
+                cameraCombo.setSelectedItem(defaultCamera);
+            }
+        } else if (houseCombo.getItemCount() > 0) {
             houseCombo.setSelectedIndex(0);
         }
         isAutoConnecting = false;
@@ -266,6 +293,18 @@ public class ControlPanel extends JPanel {
                 logger.error("PTZ move failed", ex);
                 return null;
             });
+        }
+    }
+
+    private boolean isNvidiaGpuPresent() {
+        if (new java.io.File("/dev/nvidia0").exists()) {
+            return true;
+        }
+        try {
+            Process process = new ProcessBuilder("nvidia-smi").start();
+            return process.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 }

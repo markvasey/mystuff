@@ -28,6 +28,8 @@ public class TrackedPerson {
     
     // Real-time tracking frequency log
     private double peakFrequencyHz = 0.0;
+    private double peakAmplitude = 0.0;
+    private double totalPower = 0.0;
 
     public TrackedPerson(Rectangle bounds) {
         this.bounds = bounds;
@@ -107,6 +109,8 @@ public class TrackedPerson {
 
             // Calculate peak frequency in Hz
             this.peakFrequencyHz = peakBin * 0.3125;
+            this.peakAmplitude = maxAmp;
+            this.totalPower = totalPower;
 
             if (totalPower > MIN_SEIZURE_MOTION) {
                 double dominance = targetBandPower / totalPower;
@@ -125,6 +129,8 @@ public class TrackedPerson {
     public boolean isSeizureDetected() { return seizureDetected; }
     
     public double getPeakFrequencyHz() { return peakFrequencyHz; }
+    public double getPeakAmplitude() { return peakAmplitude; }
+    public double getTotalPower() { return totalPower; }
 
     public boolean isLikelyStaticObject() {
         // Objects with low lifetime movement are ignored as furniture

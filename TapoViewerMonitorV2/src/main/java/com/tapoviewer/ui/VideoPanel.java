@@ -202,7 +202,8 @@ public class VideoPanel extends JPanel {
                 }
                 
                 if (validJointsCount > 0) {
-                    motion = maxDisplacement;
+                    // Filter out keypoint jitter below 3.5 pixels
+                    motion = (maxDisplacement < 3.5) ? 0.0 : maxDisplacement;
                     poseValid = true;
                 }
             }
@@ -232,7 +233,9 @@ public class VideoPanel extends JPanel {
                         float cudaMotion = CudaBridge.calculateMotionMagnitude(prevSeg, currSeg, w, h);
                         
                         // Map CUDA motion magnitude to displacement scale (roughly 15x multiplier)
-                        motion = cudaMotion * 15.0;
+                        double scaledCuda = cudaMotion * 15.0;
+                        // Filter out camera noise/light flicker below 3.5 units
+                        motion = (scaledCuda < 3.5) ? 0.0 : scaledCuda;
                     }
                     
                     p.setLastGrayRegion(grayRegion);
@@ -292,21 +295,21 @@ public class VideoPanel extends JPanel {
                 int rw = (int) (rect.width * ratio);
                 int rh = (int) (rect.height * ratio);
                 
+                String stats = String.format("%.1f Hz (Amp: %.1f, Pow: %.1f)", 
+                        person.getPeakFrequencyHz(), person.getPeakAmplitude(), person.getTotalPower());
+                
                 if (person.isSeizureDetected()) {
                     g2.setColor(Color.RED);
                     g2.setStroke(new BasicStroke(3.0f));
                     g2.drawRect(rx, ry, rw, rh);
                     g2.setFont(new Font("Arial", Font.BOLD, 16));
-                    g2.drawString("SEIZURE DETECTED (" + String.format("%.1f", person.getPeakFrequencyHz()) + " Hz)", rx, ry - 5);
+                    g2.drawString("SEIZURE DETECTED (" + stats + ")", rx, ry - 7);
                 } else {
                     g2.setColor(Color.GREEN);
                     g2.setStroke(new BasicStroke(2.0f));
                     g2.drawRect(rx, ry, rw, rh);
-                    
-                    if (person.getPeakFrequencyHz() > 0.1) {
-                        g2.setFont(new Font("Arial", Font.PLAIN, 12));
-                        g2.drawString(String.format("%.1f", person.getPeakFrequencyHz()) + " Hz", rx, ry - 5);
-                    }
+                    g2.setFont(new Font("Arial", Font.PLAIN, 12));
+                    g2.drawString(stats, rx, ry - 5);
                 }
 
                 // Render Skeleton Overlay
