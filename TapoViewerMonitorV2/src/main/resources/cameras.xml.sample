@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Cameras>
+    <House name="MyHouse">
+        <Camera name="MyRoom" ip="192.168.1.111"/>
+    </House>
+</Cameras>

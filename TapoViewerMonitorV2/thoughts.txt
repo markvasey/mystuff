@@ -1,0 +1,36 @@
+Building a video-based seizure detection system on a local Linux box is a deeply meaningful project, but it is also a high-stakes, technically demanding challenge.
+Because computer vision systems can suffer from false negatives (missing an event due to a blocked camera view) and false positives (triggering alarms during normal movements like scratching or brushing teeth), this system should strictly be treated as a **supplementary alert mechanism**, never a replacement for certified medical-grade monitoring devices.
+Focusing specifically on **tonic-clonic (convulsive) seizures**, which are characterized by rhythmic, high-frequency physical oscillations, provides a viable framework for a local GPU-accelerated pipeline.
+## The Hybrid Architecture: GPU + CPU
+To make this system work fluidly in real-time on your Linux box, you must divide the workload by its mathematical strengths. The GPU handles the massive spatial processing (pixels), while the CPU handles the lightweight temporal processing (time-series frequencies).
+```
+[Camera Feed] ──► [GPU: Pose Estimation] ──► [Extract Keypoint Coordinates]
+                                                       │
+[Trigger Alarm] ◄── [CPU: Threshold Detection] ◄── [CPU: FFT Frequency Analysis]
+
+```
+### Phase 1: Spatial Extraction (The GPU's Job)
+Instead of analyzing raw pixel movement—which changes constantly due to lighting, compression artifacts, and background shifts—you use the GPU to distill the person down into a mathematical skeleton.
+ * **The Model:** Use a lightweight pose estimation model like **YOLOv8-Pose** or **CIGPose** exported to an .onnx format.
+ * **The Execution:** Your Java application pulls the Tapo RTSP stream via JavaCV and passes the frames to **ONNX Runtime (with CUDA/TensorRT acceleration)**.
+ * **The Output:** Every frame, the GPU outputs an array of 17 keypoints (coordinates for wrists, elbows, shoulders, ankles, etc.) along with a confidence score. This reduces millions of pixels down to a few dozen floating-point numbers.
+### Phase 2: Temporal Analysis (The CPU's Job)
+Once you have the coordinates over time, the problem changes from a *vision* problem to a *signal processing* problem. You want to look for sustained, involuntary shaking, which typically occurs in a specific frequency band (**2 Hz to 6 Hz**).
+ 1. **The Rolling Window:** In Java, maintain a circular buffer (a rolling window) of the keypoint coordinates for the last 5 to 10 seconds of video. At 20 frames per second, a 10-second window is only 200 data points per joint.
+ 2. **Calculate Velocity/Acceleration:** For the extremities (wrists and ankles), compute the frame-to-frame change in position to get velocity and acceleration vectors.
+ 3. **Fast Fourier Transform (FFT):** Run an FFT (using a library like Apache Commons Math) over the rolling acceleration data of the wrists and ankles. The FFT converts the movement data from the time domain into the frequency domain.
+## Identifying a Seizure Event
+When a person is performing normal daily activities, the frequency spectrum of their movement is chaotic, low-frequency, or transient.
+During a tonic-clonic seizure, the spectrum changes drastically:
+ * **Rhythmic Spikes:** The FFT will show a massive, high-amplitude power spike concentrated tightly inside the **2–6 Hz** frequency window.
+ * **Sustained Duration:** Unlike a brief action (like shaking out a rug or scratching an itch), a seizure is sustained. Your Java state machine should only trigger an alert if this specific frequency spike remains dominant for a continuous block of time (e.g., more than 10 or 15 seconds).
+## Critical Engineering Constraints for a Home Setup
+### 1. The Infrared (IR) Night-Vision Problem
+Most home security cameras switch to IR black-and-white mode at night. Standard pose estimation models are trained heavily on rich RGB color datasets. When the camera switches to IR, contrast drops, and the model can lose tracking on limbs hidden by blankets.
+ * *Solution:* You may need to fine-tune your chosen pose model on grayscale/IR imagery, or choose a camera angle that maximizes the visibility of the bed or room layout without relying on color depth.
+### 2. Handling Occlusion (Blankets and Sheets)
+If the person is sleeping under a heavy duvet, the camera won't be able to see their joints, meaning the pose model will output low confidence scores or fail entirely.
+ * *Alternative Approach:* If keypoint tracking fails due to occlusion, you can fall back on **Optical Flow** (calculating pixel velocity vectors across the entire frame) using OpenCV. While noisier than pose tracking, running an FFT on the overall pixel velocity within a cropped region of interest (the bed) can still capture the rhythmic oscillation of a seizure under a blanket.
+### 3. Mitigating Alarm Fatigue
+Nothing kills the utility of a home monitoring system faster than false alarms at 3:00 AM. Expect to spend significant time tuning your thresholds. You will want to filter out specific high-frequency, low-duration movements and map out "dead zones" in the video frame where normal, repetitive movements (like turning a fan on or a television screen flickering) might occur.
+Do you want to start by building the first stage—setting up the Java pipeline to run a YOLO-Pose model on your Linux GPU to see how cleanly it tracks coordinates—or would you prefer to look at how the mathematical time-series filtering logic handles movement data first?
