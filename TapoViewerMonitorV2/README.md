@@ -90,13 +90,21 @@ make -C src/main/native
 ```
 
 ### 2. Run the Main Application
-Run the Maven wrapper with JDK 26 and native access flags:
+
+#### Option A: Using the Launcher Script (Recommended)
+We provide a helper launcher script `run.sh` in the project root that automatically sets up the JDK 26 environment, configures the CUDA 11.2 library paths, warns if Persistence Mode is disabled, compiles the native CUDA library if needed, compiles the shaded jar if missing, and executes the application with the required VM flags:
+```bash
+./run.sh
+```
+
+#### Option B: Using Maven exec:exec
+You can run the application directly through Maven. The plugin is configured to spawn the JVM with the required native modules and classpath setup when invoking the `exec` goal:
 ```bash
 export JAVA_HOME=/home/markvasey/.sdkman/candidates/java/26.0.1-tem
 export PATH=$JAVA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
 
-./mvnw clean compile exec:java -Dexec.mainClass="com.tapoviewer.TapoViewerMonitorApp"
+./mvnw exec:exec
 ```
 
 ---

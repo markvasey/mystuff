@@ -21,17 +21,28 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>run-exec</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>java</executable>
+              <arguments>
+                <argument>--add-modules</argument>
+                <argument>jdk.incubator.vector</argument>
+                <argument>--enable-native-access</argument>
+                <argument>ALL-UNNAMED</argument>
+                <argument>-classpath</argument>
+                <classpath />
+                <argument>com.tapoviewer.TapoViewerMonitorApp</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
         <configuration>
-          <executable>java</executable>
-          <arguments>
-            <argument>--add-modules</argument>
-            <argument>jdk.incubator.vector</argument>
-            <argument>--enable-native-access</argument>
-            <argument>ALL-UNNAMED</argument>
-            <argument>-classpath</argument>
-            <classpath />
-            <argument>com.tapoviewer.TapoViewerMonitorApp</argument>
-          </arguments>
+          <mainClass>com.tapoviewer.TapoViewerMonitorApp</mainClass>
         </configuration>
       </plugin>
       <plugin>
@@ -91,6 +102,7 @@
     <maven.compiler.release>26</maven.compiler.release>
     <onvif.version>1.2.0</onvif.version>
     <slf4j.version>2.0.12</slf4j.version>
+    <javacpp.platform>linux-x86_64</javacpp.platform>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.18.2</jackson.version>
     <javacv.version>1.5.11</javacv.version>

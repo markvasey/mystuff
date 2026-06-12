@@ -12,6 +12,7 @@
         <maven.compiler.release>26</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javacv.version>1.5.11</javacv.version>
+        <javacpp.platform>linux-x86_64</javacpp.platform>
         <onvif.version>1.2.0</onvif.version>
         <jackson.version>2.18.2</jackson.version>
         <slf4j.version>2.0.12</slf4j.version>
@@ -21,8 +22,52 @@
         <!-- Video Playback via JavaCV (FFmpeg) -->
         <dependency>
             <groupId>org.bytedeco</groupId>
-            <artifactId>javacv-platform</artifactId>
+            <artifactId>javacv</artifactId>
             <version>${javacv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>1.5.11</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>1.5.11</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>7.1-1.5.11</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>7.1-1.5.11</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv</artifactId>
+            <version>4.10.0-1.5.11</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv</artifactId>
+            <version>4.10.0-1.5.11</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>openblas</artifactId>
+            <version>0.3.28-1.5.11</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>openblas</artifactId>
+            <version>0.3.28-1.5.11</version>
+            <classifier>linux-x86_64</classifier>
         </dependency>
 
         <!-- ONVIF Camera Control -->
@@ -93,17 +138,28 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <executable>java</executable>
-                    <arguments>
-                        <argument>--add-modules</argument>
-                        <argument>jdk.incubator.vector</argument>
-                        <argument>--enable-native-access</argument>
-                        <argument>ALL-UNNAMED</argument>
-                        <argument>-classpath</argument>
-                        <classpath/>
-                        <argument>com.tapoviewer.TapoViewerMonitorApp</argument>
-                    </arguments>
+                    <mainClass>com.tapoviewer.TapoViewerMonitorApp</mainClass>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>run-exec</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>java</executable>
+                            <arguments>
+                                <argument>--add-modules</argument>
+                                <argument>jdk.incubator.vector</argument>
+                                <argument>--enable-native-access</argument>
+                                <argument>ALL-UNNAMED</argument>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>com.tapoviewer.TapoViewerMonitorApp</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
