@@ -14,6 +14,7 @@ The application is built for **Java 26** and utilizes an external NVIDIA GPU (RT
 *   **Panama FFM CUDA Fallback (Occlusion Handling):** When a patient is under bedding (causing joint tracking confidence to drop), the pipeline falls back to pixel-level motion differences. Calculations are offloaded to a custom GPU L1 norm difference NPP statistics kernel (`libseizure_cuda.so`) written in CUDA C++ and called via Java's modern FFM API (`java.lang.foreign`), achieving near-zero overhead.
 *   **High-Performance JTransforms FFT (Priority 4):** Integrated `JTransforms` 3.1 to replace Apache Commons Math for the clonic frequency analysis. It caches a `DoubleFFT_1D` instance per tracked person and operates in-place on raw primitive arrays, eliminating the garbage collection overhead of allocating `Complex` wrapper objects.
 *   **Adaptive Frame Skipping:** Processes every other frame to halve GPU load. The temporal analysis dynamically adjusts the FFT window from 64-point (at 20 fps) to **32-point** (at 10 fps) to maintain the exact same $0.3125$ Hz/bin resolution and $2.0\text{--}4.5$ Hz target clonic band.
+*   **Tiled Multi-Camera Grid & Auto-Discovery:** Simultaneously monitors all connectable Tapo cameras in a selected house. It runs parallel TCP port checks (port 554) to dynamically discover online cameras, tiles their live feeds in an auto-adjusting grid layout, and processes all feeds in parallel. GPU memory is protected by sharing a single `YoloPoseDetector` session, while PTZ commands are dynamically routed to the selected/clicked camera tile.
 
 ---
 
@@ -193,8 +194,9 @@ java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
 *   **`com.tapoviewer.math.CudaBridge`:** Links Java `MethodHandle` calls to native symbols inside `libseizure_cuda.so` using the Panama FFM API. Handles off-heap memory segment passing for both preprocessing and optical flow.
 *   **`com.tapoviewer.math.YoloPoseDetector`:** Orchestrates the thread-local host buffers and native GPU preprocessing pipeline, manages the synchronized ONNX GPU session, and applies Non-Maximum Suppression (NMS) to isolate 17 joint keypoints.
 *   **`com.tapoviewer.model.TrackedPerson`:** Tracks individual histories, calculates joint displacements, executes the fast in-place JTransforms FFT transformations, and applies power threshold parameters with posture aspect filtering.
+*   **`com.tapoviewer.ui.VideoGridPanel`:** Manages dynamic grid tiling, schedules parallel camera auto-discovery checks, and orchestrates a single shared `YoloPoseDetector` across all active feeds.
 *   **`com.tapoviewer.ui.VideoPanel`:** Grabs RTSP streams via JavaCV, invokes the GPU detectors, overlays the skeletal wireframes, and renders detected frequencies.
-*   **`com.tapoviewer.ui.ControlPanel`:** UI configurations, credentials loading, PTZ ONVIF movements, and the **GPU Decode (NVDEC)** checkbox toggle.
+*   **`com.tapoviewer.ui.ControlPanel`:** UI configurations, credentials loading, PTZ ONVIF movements, and coordinating tiled stream connections and PTZ targets.
 
 ---
 

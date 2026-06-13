@@ -15,6 +15,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.*;
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class ControlPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(ControlPanel.class);
@@ -37,7 +38,7 @@ public class ControlPanel extends JPanel {
     private final JButton zoomOutBtn = new JButton("Zoom -");
 
     private CameraClient client;
-    private final VideoPanel videoPanel;
+    private final VideoGridPanel videoGridPanel;
     private final DetectionHistoryPanel historyPanel = new DetectionHistoryPanel();
     private boolean isAutoConnecting = false;
     
@@ -45,8 +46,8 @@ public class ControlPanel extends JPanel {
     private String defaultHouse = null;
     private String defaultCamera = null;
 
-    public ControlPanel(VideoPanel videoPanel) {
-        this.videoPanel = videoPanel;
+    public ControlPanel(VideoGridPanel videoGridPanel) {
+        this.videoGridPanel = videoGridPanel;
         setLayout(new BorderLayout());
 
         loadCameraXml();
@@ -64,7 +65,7 @@ public class ControlPanel extends JPanel {
         }
 
         // Register snapshot listener
-        videoPanel.setSnapshotListener(historyPanel::addSnapshot);
+        videoGridPanel.setSnapshotListener(historyPanel::addSnapshot);
 
         JPanel settingsPanel = new JPanel(new GridLayout(7, 2));
         settingsPanel.add(new JLabel("House:"));
@@ -98,6 +99,22 @@ public class ControlPanel extends JPanel {
 
         add(ptzPanel, BorderLayout.CENTER);
         add(historyPanel, BorderLayout.SOUTH);
+
+        // Register selection listener
+        videoGridPanel.setSelectionListener(cameraName -> {
+            isAutoConnecting = true;
+            cameraCombo.setSelectedItem(cameraName);
+            isAutoConnecting = false;
+            
+            String selectedHouse = (String) houseCombo.getSelectedItem();
+            if (selectedHouse != null) {
+                String ip = houseData.get(selectedHouse).get(cameraName);
+                if (ip != null) {
+                    ipLabel.setText(ip);
+                    connectPtz(cameraName, ip);
+                }
+            }
+        });
 
         connectBtn.addActionListener(e -> {
             if (connectBtn.getText().equals("Disconnect")) {
@@ -174,6 +191,7 @@ public class ControlPanel extends JPanel {
         }
 
         houseCombo.addActionListener(e -> {
+            isAutoConnecting = true;
             String selectedHouse = (String) houseCombo.getSelectedItem();
             cameraCombo.removeAllItems();
             if (selectedHouse != null && houseData.containsKey(selectedHouse)) {
@@ -182,17 +200,20 @@ public class ControlPanel extends JPanel {
                     cameraCombo.addItem(cam);
                 }
             }
+            isAutoConnecting = false;
         });
 
         cameraCombo.addActionListener(e -> {
+            if (isAutoConnecting) return;
             String selectedHouse = (String) houseCombo.getSelectedItem();
             String selectedCam = (String) cameraCombo.getSelectedItem();
             if (selectedHouse != null && selectedCam != null) {
                 String ip = houseData.get(selectedHouse).get(selectedCam);
                 ipLabel.setText(ip);
                 
-                if (!isAutoConnecting && (connectBtn.getText().equals("Disconnect") || connectBtn.getText().equals("Connected"))) {
-                    connect();
+                if (connectBtn.getText().equals("Disconnect") || connectBtn.getText().equals("Connected")) {
+                    videoGridPanel.setSelectedCamera(selectedCam);
+                    connectPtz(selectedCam, ip);
                 }
             }
         });
@@ -220,48 +241,112 @@ public class ControlPanel extends JPanel {
         }
     }
 
-    private void connect() {
-        if (client != null) {
-            videoPanel.stop();
-            client.release();
+    private boolean isPortReachable(String ip, int port, int timeoutMs) {
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(ip, port), timeoutMs);
+            return true;
+        } catch (Exception e) {
+            return false;
         }
+    }
 
+    private void connectPtz(String cameraName, String ip) {
+        if (client != null) {
+            client.release();
+            client = null;
+        }
         setPtzEnabled(false, false);
 
         CameraSettings settings = new CameraSettings();
-        settings.setIp(ipLabel.getText().trim());
+        settings.setIp(ip.trim());
         settings.setRtspUsername(userField.getText().trim());
         settings.setRtspPassword(new String(passField.getPassword()).trim());
         settings.setOnvifUsername(userField.getText().trim());
         settings.setOnvifPassword(new String(passField.getPassword()).trim());
 
-        connectBtn.setEnabled(false);
-        connectBtn.setText("Connecting...");
-
         client = new CameraClient(settings);
         client.connect().thenAccept(zoomSupported -> {
             SwingUtilities.invokeLater(() -> {
+                setPtzEnabled(true, zoomSupported);
+                logger.info("PTZ connected for camera: {}", cameraName);
+            });
+        }).exceptionally(ex -> {
+            logger.warn("ONVIF PTZ Connection Failed for camera {}: {}", cameraName, ex.getMessage());
+            return null;
+        });
+    }
+
+    private void connect() {
+        if (client != null) {
+            client.release();
+            client = null;
+        }
+        videoGridPanel.stop();
+        setPtzEnabled(false, false);
+
+        String selectedHouse = (String) houseCombo.getSelectedItem();
+        if (selectedHouse == null) return;
+
+        Map<String, String> houseCameras = houseData.get(selectedHouse);
+        if (houseCameras == null || houseCameras.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No cameras configured for this house.");
+            return;
+        }
+
+        connectBtn.setEnabled(false);
+        connectBtn.setText("Connecting...");
+
+        // Perform discovery (reachability check) in parallel
+        CompletableFuture.supplyAsync(() -> {
+            Map<String, String> connectable = new LinkedHashMap<>();
+            java.util.List<CompletableFuture<Map.Entry<String, String>>> futures = new ArrayList<>();
+            for (Map.Entry<String, String> entry : houseCameras.entrySet()) {
+                futures.add(CompletableFuture.supplyAsync(() -> {
+                    boolean ok = isPortReachable(entry.getValue(), 554, 1500);
+                    return ok ? entry : null;
+                }));
+            }
+            for (CompletableFuture<Map.Entry<String, String>> f : futures) {
+                try {
+                    Map.Entry<String, String> entry = f.get();
+                    if (entry != null) {
+                        connectable.put(entry.getKey(), entry.getValue());
+                    }
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+            return connectable;
+        }).thenAccept(connectable -> {
+            SwingUtilities.invokeLater(() -> {
+                if (connectable.isEmpty()) {
+                    connectBtn.setText("Connect");
+                    connectBtn.setEnabled(true);
+                    JOptionPane.showMessageDialog(this, "No connectable cameras discovered.");
+                    return;
+                }
+
                 String stream = lowResCheck.isSelected() ? "stream2" : "stream1";
                 boolean useGpu = gpuDecodeCheck.isSelected();
-                videoPanel.play(
-                        settings.getIp(),
-                        settings.getRtspPort(),
-                        stream,
-                        settings.getRtspUsername(),
-                        settings.getRtspPassword(),
-                        useGpu
-                );
+                String username = userField.getText().trim();
+                String password = new String(passField.getPassword()).trim();
+
+                videoGridPanel.playCameras(connectable, stream, username, password, useGpu);
+
                 connectBtn.setText("Connected");
                 connectBtn.setEnabled(true);
-                setPtzEnabled(true, zoomSupported);
 
-                // Transition to Disconnect after a 1-second delay
+                // Default to selecting the first connectable camera
+                String firstCam = connectable.keySet().iterator().next();
+                cameraCombo.setSelectedItem(firstCam);
+
+                // Transition button to "Disconnect" state after 1 second delay
                 javax.swing.Timer timer = new javax.swing.Timer(1000, evt -> connectBtn.setText("Disconnect"));
                 timer.setRepeats(false);
                 timer.start();
             });
         }).exceptionally(ex -> {
-            logger.error("ONVIF Connection Failed: {}", ex.getMessage());
+            logger.error("ONVIF/Video Connection Failed: {}", ex.getMessage());
             SwingUtilities.invokeLater(() -> {
                 connectBtn.setEnabled(true);
                 connectBtn.setText("Connect");
@@ -276,7 +361,7 @@ public class ControlPanel extends JPanel {
             client.release();
             client = null;
         }
-        videoPanel.stop();
+        videoGridPanel.stop();
         connectBtn.setText("Connect");
         setPtzEnabled(false, false);
     }

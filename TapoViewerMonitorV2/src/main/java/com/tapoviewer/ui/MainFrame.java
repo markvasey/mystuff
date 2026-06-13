@@ -6,26 +6,26 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 public class MainFrame extends JFrame {
-    private final VideoPanel videoPanel;
+    private final VideoGridPanel videoGridPanel;
     private final ControlPanel controlPanel;
 
     public MainFrame() {
-        setTitle("TapoViewer");
+        setTitle("TapoViewer Multi-Camera Monitor");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1024, 768);
+        setSize(1280, 800); // Increased width to comfortably fit multiple tiled streams
         setLayout(new BorderLayout());
 
-        videoPanel = new VideoPanel();
-        controlPanel = new ControlPanel(videoPanel);
+        videoGridPanel = new VideoGridPanel();
+        controlPanel = new ControlPanel(videoGridPanel);
 
-        add(videoPanel, BorderLayout.CENTER);
+        add(videoGridPanel, BorderLayout.CENTER);
         add(controlPanel, BorderLayout.EAST);
 
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                videoPanel.stop();
-                videoPanel.release();
+                videoGridPanel.stop();
+                videoGridPanel.release();
                 controlPanel.release();
             }
         });

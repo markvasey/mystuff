@@ -35,6 +35,10 @@ public class VideoPanel extends JPanel {
     private Thread workerThread;
 
     private final YoloPoseDetector yoloDetector;
+    private final boolean ownsDetector;
+    private String cameraName = "Tapo Camera";
+    private boolean selected = false;
+
     private final OpenCVFrameConverter.ToMat toMatConverter = new OpenCVFrameConverter.ToMat();
     private final List<TrackedPerson> trackedPeople = new ArrayList<>();
     private final List<TrackedPerson> renderList = new CopyOnWriteArrayList<>();
@@ -42,15 +46,35 @@ public class VideoPanel extends JPanel {
     private LocalDateTime lastSnapshotTime = LocalDateTime.MIN;
 
     public VideoPanel() {
+        this.yoloDetector = new YoloPoseDetector();
+        this.ownsDetector = true;
         setBackground(Color.BLACK);
         setLayout(new BorderLayout());
+    }
 
-        // Initialize GPU-accelerated YOLO Pose Detector
-        yoloDetector = new YoloPoseDetector();
+    public VideoPanel(YoloPoseDetector yoloDetector) {
+        this.yoloDetector = yoloDetector;
+        this.ownsDetector = false;
+        setBackground(Color.BLACK);
+        setLayout(new BorderLayout());
+    }
+
+    public String getCameraName() {
+        return cameraName;
+    }
+
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+        repaint();
     }
 
     public void setSnapshotListener(Consumer<PersonSnapshot> listener) {
         this.snapshotListener = listener;
+    }
+
+    public void play(String cameraName, String ip, int port, String stream, String username, String password, boolean useGpuDecode) {
+        this.cameraName = cameraName;
+        play(ip, port, stream, username, password, useGpuDecode);
     }
 
     public void play(String ip, int port, String stream, String username, String password) {
@@ -123,7 +147,7 @@ public class VideoPanel extends JPanel {
                                         g2.drawImage(crop, 0, 0, null);
                                         g2.dispose();
                                         
-                                        snapshotListener.accept(new PersonSnapshot(copy, now));
+                                        snapshotListener.accept(new PersonSnapshot(copy, now, cameraName));
                                         lastSnapshotTime = now;
                                         break;
                                     }
@@ -280,6 +304,9 @@ public class VideoPanel extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
         if (currentFrame != null) {
             int panelWidth = getWidth();
             int panelHeight = getHeight();
@@ -292,11 +319,15 @@ public class VideoPanel extends JPanel {
             int x = (panelWidth - newWidth) / 2;
             int y = (panelHeight - newHeight) / 2;
 
-            g.drawImage(currentFrame, x, y, newWidth, newHeight, null);
+            g2.drawImage(currentFrame, x, y, newWidth, newHeight, null);
 
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            
+            // Draw Camera Name Overlay
+            g2.setColor(new Color(0, 0, 0, 160));
+            g2.fillRect(x + 10, y + 10, 180, 25);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("Arial", Font.BOLD, 12));
+            g2.drawString(cameraName, x + 15, y + 27);
+
             for (TrackedPerson person : renderList) {
                 Rectangle rect = person.getBounds();
                 int rx = x + (int) (rect.x * ratio);
@@ -311,13 +342,13 @@ public class VideoPanel extends JPanel {
                     g2.setColor(Color.RED);
                     g2.setStroke(new BasicStroke(3.0f));
                     g2.drawRect(rx, ry, rw, rh);
-                    g2.setFont(new Font("Arial", Font.BOLD, 16));
+                    g2.setFont(new Font("Arial", Font.BOLD, 14));
                     g2.drawString("SEIZURE DETECTED (" + stats + ")", rx, ry - 7);
                 } else {
                     g2.setColor(Color.GREEN);
                     g2.setStroke(new BasicStroke(2.0f));
                     g2.drawRect(rx, ry, rw, rh);
-                    g2.setFont(new Font("Arial", Font.PLAIN, 12));
+                    g2.setFont(new Font("Arial", Font.PLAIN, 11));
                     g2.drawString(stats, rx, ry - 5);
                 }
 
@@ -327,8 +358,22 @@ public class VideoPanel extends JPanel {
                 }
             }
         } else {
-            g.setColor(Color.WHITE);
-            g.drawString("No Video Signal", getWidth() / 2 - 40, getHeight() / 2);
+            g2.setColor(Color.DARK_GRAY);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+            g2.setColor(Color.LIGHT_GRAY);
+            g2.setFont(new Font("Arial", Font.BOLD, 14));
+            String status = cameraName + " (Offline)";
+            FontMetrics fm = g2.getFontMetrics();
+            int sx = (getWidth() - fm.stringWidth(status)) / 2;
+            int sy = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+            g2.drawString(status, sx, sy);
+        }
+
+        // Draw selection border if selected
+        if (selected) {
+            g2.setColor(new Color(255, 140, 0)); // Dark orange border
+            g2.setStroke(new BasicStroke(4.0f));
+            g2.drawRect(2, 2, getWidth() - 4, getHeight() - 4);
         }
     }
 
@@ -401,7 +446,7 @@ public class VideoPanel extends JPanel {
 
     public void release() {
         stop();
-        if (yoloDetector != null) {
+        if (yoloDetector != null && ownsDetector) {
             yoloDetector.close();
         }
     }
