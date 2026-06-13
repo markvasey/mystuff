@@ -30,6 +30,7 @@ public class TrackedPerson {
     private double peakFrequencyHz = 0.0;
     private double peakAmplitude = 0.0;
     private double totalPower = 0.0;
+    private double papr = 0.0;
 
     public TrackedPerson(Rectangle bounds) {
         this.bounds = bounds;
@@ -88,11 +89,11 @@ public class TrackedPerson {
             int peakBin = 0;
 
             // Fs = 20 fps, N = 64. Resolution = 20 / 64 = 0.3125 Hz per bin.
-            // Target band 2 Hz - 6 Hz maps to bin index range:
+            // Target clonic band 2.0 Hz - 4.5 Hz (optimal clonic range based on Frontiers 2023 findings):
             // Min bin = 2 / 0.3125 = 6.4 (bin 6)
-            // Max bin = 6 / 0.3125 = 19.2 (bin 19)
+            // Max bin = 4.5 / 0.3125 = 14.4 (bin 15)
             int minBin = 6;
-            int maxBin = 19;
+            int maxBin = 15;
 
             for (int i = 1; i < HISTORY_SIZE / 2; i++) {
                 double amp = fftResult[i].abs();
@@ -112,10 +113,17 @@ public class TrackedPerson {
             this.peakAmplitude = maxAmp;
             this.totalPower = totalPower;
 
+            // Calculate Peak-to-Average Power Ratio (PAPR) to identify narrow-band oscillations
+            double averageAC = totalPower / (HISTORY_SIZE / 2 - 1);
+            this.papr = (averageAC > 0.001) ? (maxAmp / averageAC) : 0.0;
+
             if (totalPower > MIN_SEIZURE_MOTION) {
                 double dominance = targetBandPower / totalPower;
-                // Seizure is flagged if the 2-6 Hz band is dominant and above the noise floor
-                seizureDetected = (dominance >= DOMINANCE_THRESHOLD && maxAmp > 5.0);
+                // Seizure is flagged if:
+                // 1. Dominance threshold is met (>= 40% of AC power in target band)
+                // 2. Peak amplitude is above the threshold (> 5.0)
+                // 3. Peak is a narrow-band spike (PAPR > 2.5) to reject broad-band hyperkinetic thrashing
+                seizureDetected = (dominance >= DOMINANCE_THRESHOLD && maxAmp > 5.0 && this.papr > 2.5);
             } else {
                 seizureDetected = false;
             }
@@ -131,6 +139,7 @@ public class TrackedPerson {
     public double getPeakFrequencyHz() { return peakFrequencyHz; }
     public double getPeakAmplitude() { return peakAmplitude; }
     public double getTotalPower() { return totalPower; }
+    public double getPapr() { return papr; }
 
     public boolean isLikelyStaticObject() {
         // Objects with low lifetime movement are ignored as furniture

@@ -101,6 +101,9 @@ public class VideoPanel extends JPanel {
                             LocalDateTime now = LocalDateTime.now();
                             if (now.isAfter(lastSnapshotTime.plusSeconds(1))) {
                                 for (TrackedPerson person : renderList) {
+                                    if (!person.isSeizureDetected()) {
+                                        continue;
+                                    }
                                     Rectangle rect = person.getBounds();
                                     int x = Math.max(0, rect.x);
                                     int y = Math.max(0, rect.y);
@@ -295,8 +298,8 @@ public class VideoPanel extends JPanel {
                 int rw = (int) (rect.width * ratio);
                 int rh = (int) (rect.height * ratio);
                 
-                String stats = String.format("%.1f Hz (Amp: %.1f, Pow: %.1f)", 
-                        person.getPeakFrequencyHz(), person.getPeakAmplitude(), person.getTotalPower());
+                String stats = String.format("%.1f Hz (Amp: %.1f, Pow: %.1f, PAPR: %.1f)", 
+                        person.getPeakFrequencyHz(), person.getPeakAmplitude(), person.getTotalPower(), person.getPapr());
                 
                 if (person.isSeizureDetected()) {
                     g2.setColor(Color.RED);

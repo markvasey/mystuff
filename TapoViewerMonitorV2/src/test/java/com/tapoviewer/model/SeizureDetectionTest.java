@@ -96,4 +96,24 @@ public class SeizureDetectionTest {
         // Verify CudaBridge loads the compiled library and resolves function symbols cleanly
         assertNotNull(CudaBridge.class.getSimpleName());
     }
+
+    @Test
+    public void testSeizureConditionForSnapshots() {
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
+
+        // Under normal circumstances/motion, seizure is not detected
+        for (int i = 0; i < 70; i++) {
+            person.addMotion(Math.random() * 2.0);
+        }
+        assertFalse(person.isSeizureDetected(), "No seizure should be detected under normal random motion.");
+
+        // Under rhythmic seizure circumstances, seizure is detected
+        double samplingFrequency = 20.0;
+        double targetFrequency = 3.5; // 3.5 Hz
+        for (int t = 0; t < 70; t++) {
+            double motion = 3.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 4.0;
+            person.addMotion(motion);
+        }
+        assertTrue(person.isSeizureDetected(), "Seizure should be detected under rhythmic motion, triggering snapshot capability.");
+    }
 }
