@@ -18,11 +18,17 @@ public class TrackedPerson {
     
     // Unified motion signal history
     private final LinkedList<Double> motionHistory = new LinkedList<>();
-    private static final int HISTORY_SIZE = 64; // Power of 2 required for FFT (approx 3.2s at 20fps)
+    private final int historySize;
+    private final double resolutionHz;
+    private final int minBin;
+    private final int maxBin;
+    private final boolean frameSkipping;
+
     private static final double MIN_SEIZURE_MOTION = 50.0; // Noise floor for FFT magnitude
     private static final double DOMINANCE_THRESHOLD = 0.40; // Target band must have at least 40% of AC power
 
     private boolean seizureDetected = false;
+    private int consecutiveSeizureFrames = 0;
     private int lastSeenFrames = 0;
     private double cumulativeMotion = 0;
     
@@ -33,7 +39,23 @@ public class TrackedPerson {
     private double papr = 0.0;
 
     public TrackedPerson(Rectangle bounds) {
+        this(bounds, false);
+    }
+
+    public TrackedPerson(Rectangle bounds, boolean frameSkipping) {
         this.bounds = bounds;
+        this.frameSkipping = frameSkipping;
+        if (frameSkipping) {
+            this.historySize = 32;
+            this.resolutionHz = 0.3125; // 10 / 32 = 0.3125 Hz per bin
+            this.minBin = 6;            // 2.0 / 0.3125 = 6.4 (bin 6)
+            this.maxBin = 14;           // 4.5 / 0.3125 = 14.4 (bin 14)
+        } else {
+            this.historySize = 64;
+            this.resolutionHz = 0.3125; // 20 / 64 = 0.3125 Hz per bin
+            this.minBin = 6;
+            this.maxBin = 15;
+        }
     }
 
     public Rectangle getBounds() { return bounds; }
@@ -58,20 +80,24 @@ public class TrackedPerson {
     public void addMotion(double magnitude) {
         motionHistory.add(magnitude);
         cumulativeMotion += magnitude;
-        if (motionHistory.size() > HISTORY_SIZE) {
+        if (motionHistory.size() > historySize) {
             motionHistory.removeFirst();
         }
         analyzeSeizure();
     }
 
+    public double getLastMotionValue() {
+        return motionHistory.isEmpty() ? 0.0 : motionHistory.getLast();
+    }
+
     private void analyzeSeizure() {
-        if (motionHistory.size() < HISTORY_SIZE) {
+        if (motionHistory.size() < historySize) {
             seizureDetected = false;
             return;
         }
 
         // 1. Prepare data for FFT
-        double[] data = new double[HISTORY_SIZE];
+        double[] data = new double[historySize];
         int idx = 0;
         for (Double val : motionHistory) {
             data[idx++] = val;
@@ -88,14 +114,7 @@ public class TrackedPerson {
             double maxAmp = 0.0;
             int peakBin = 0;
 
-            // Fs = 20 fps, N = 64. Resolution = 20 / 64 = 0.3125 Hz per bin.
-            // Target clonic band 2.0 Hz - 4.5 Hz (optimal clonic range based on Frontiers 2023 findings):
-            // Min bin = 2 / 0.3125 = 6.4 (bin 6)
-            // Max bin = 4.5 / 0.3125 = 14.4 (bin 15)
-            int minBin = 6;
-            int maxBin = 15;
-
-            for (int i = 1; i < HISTORY_SIZE / 2; i++) {
+            for (int i = 1; i < historySize / 2; i++) {
                 double amp = fftResult[i].abs();
                 totalPower += amp;
 
@@ -109,13 +128,25 @@ public class TrackedPerson {
             }
 
             // Calculate peak frequency in Hz
-            this.peakFrequencyHz = peakBin * 0.3125;
+            this.peakFrequencyHz = peakBin * resolutionHz;
+
+            // If frame skipping is enabled, scale the standard 32-point FFT values by 2.0
+            // so they match the magnitude/power thresholds calibrated for the 64-point FFT.
+            if (frameSkipping) {
+                maxAmp *= 2.0;
+                totalPower *= 2.0;
+                targetBandPower *= 2.0;
+            }
+
             this.peakAmplitude = maxAmp;
             this.totalPower = totalPower;
 
             // Calculate Peak-to-Average Power Ratio (PAPR) to identify narrow-band oscillations
-            double averageAC = totalPower / (HISTORY_SIZE / 2 - 1);
+            double averageAC = totalPower / (historySize / 2 - 1);
             this.papr = (averageAC > 0.001) ? (maxAmp / averageAC) : 0.0;
+
+            double dominanceThreshold = frameSkipping ? 0.30 : 0.40;
+            double paprThreshold = frameSkipping ? 2.2 : 2.5;
 
             if (totalPower > MIN_SEIZURE_MOTION) {
                 double dominance = targetBandPower / totalPower;
@@ -126,13 +157,17 @@ public class TrackedPerson {
                     aspectRatio = (double) bounds.height / bounds.width;
                 }
                 
-                // Seizure is flagged if:
-                // 1. Dominance threshold is met (>= 40% of AC power in target band)
-                // 2. Peak amplitude is above the threshold (> 25.0)
-                // 3. Peak is a narrow-band spike (PAPR > 2.5) to reject broad-band hyperkinetic thrashing
-                // 4. Person is not standing upright (aspect ratio <= 1.8)
-                seizureDetected = (dominance >= DOMINANCE_THRESHOLD && maxAmp > 25.0 && this.papr > 2.5 && aspectRatio <= 1.8);
+                boolean currentFrameSeizure = (dominance >= dominanceThreshold && maxAmp > 25.0 && this.papr > paprThreshold && aspectRatio <= 1.8);
+                if (currentFrameSeizure) {
+                    consecutiveSeizureFrames++;
+                } else {
+                    consecutiveSeizureFrames = 0;
+                }
+                
+                // Flag seizure if it persists for at least 2 consecutive frames
+                seizureDetected = (consecutiveSeizureFrames >= 2);
             } else {
+                consecutiveSeizureFrames = 0;
                 seizureDetected = false;
             }
 

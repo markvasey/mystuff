@@ -72,25 +72,39 @@ float calculate_motion_magnitude(const unsigned char* prev_host, const unsigned 
     int size = width * height;
     if (size <= 0) return 0.0f;
     
-    unsigned char* d_prev = nullptr;
-    unsigned char* d_curr = nullptr;
-    float* d_sum = nullptr;
+    thread_local static unsigned char* d_prev = nullptr;
+    thread_local static unsigned char* d_curr = nullptr;
+    thread_local static float* d_sum = nullptr;
+    thread_local static int cached_size = 0;
     
     cudaError_t err;
-    err = cudaMalloc(&d_prev, size);
-    if (err != cudaSuccess) return 0.0f;
-    
-    err = cudaMalloc(&d_curr, size);
-    if (err != cudaSuccess) {
-        cudaFree(d_prev);
-        return 0.0f;
-    }
-    
-    err = cudaMalloc(&d_sum, sizeof(float));
-    if (err != cudaSuccess) {
-        cudaFree(d_prev);
-        cudaFree(d_curr);
-        return 0.0f;
+    if (size > cached_size) {
+        if (d_prev) cudaFree(d_prev);
+        if (d_curr) cudaFree(d_curr);
+        if (d_sum) cudaFree(d_sum);
+        
+        err = cudaMalloc(&d_prev, size);
+        if (err != cudaSuccess) {
+            d_prev = nullptr; d_curr = nullptr; d_sum = nullptr; cached_size = 0;
+            return 0.0f;
+        }
+        
+        err = cudaMalloc(&d_curr, size);
+        if (err != cudaSuccess) {
+            cudaFree(d_prev);
+            d_prev = nullptr; d_curr = nullptr; d_sum = nullptr; cached_size = 0;
+            return 0.0f;
+        }
+        
+        err = cudaMalloc(&d_sum, sizeof(float));
+        if (err != cudaSuccess) {
+            cudaFree(d_prev);
+            cudaFree(d_curr);
+            d_prev = nullptr; d_curr = nullptr; d_sum = nullptr; cached_size = 0;
+            return 0.0f;
+        }
+        
+        cached_size = size;
     }
     
     float initial_sum = 0.0f;
@@ -108,10 +122,6 @@ float calculate_motion_magnitude(const unsigned char* prev_host, const unsigned 
     
     float host_sum = 0.0f;
     cudaMemcpy(&host_sum, d_sum, sizeof(float), cudaMemcpyDeviceToHost);
-    
-    cudaFree(d_prev);
-    cudaFree(d_curr);
-    cudaFree(d_sum);
     
     return host_sum / size;
 }

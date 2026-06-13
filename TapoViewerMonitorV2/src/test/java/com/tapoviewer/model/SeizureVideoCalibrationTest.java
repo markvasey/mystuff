@@ -72,16 +72,18 @@ public class SeizureVideoCalibrationTest {
         // Suppress FFmpeg noise logs
         org.bytedeco.ffmpeg.global.avutil.av_log_set_level(org.bytedeco.ffmpeg.global.avutil.AV_LOG_ERROR);
 
-        List<VideoStats> allStats = new ArrayList<>();
+        List<VideoStats> allStats = java.util.Collections.synchronizedList(new ArrayList<>());
 
         try (YoloPoseDetector detector = new YoloPoseDetector()) {
-            for (File videoFile : files) {
+            java.util.Arrays.stream(files).parallel().forEach(videoFile -> {
                 VideoStats stats = analyzeVideo(videoFile, detector);
                 if (stats != null) {
                     allStats.add(stats);
                 }
-            }
+            });
         }
+
+        allStats.sort(java.util.Comparator.comparing(vs -> vs.name));
 
         // Print comparative summary table in markdown format
         System.out.println("\n--- DATASET REPORT: " + datasetDir + " ---");
@@ -129,6 +131,10 @@ public class SeizureVideoCalibrationTest {
                 if (frame == null) break;
                 frameIdx++;
 
+                if (frameIdx > 1 && frameIdx % 2 == 0) {
+                    continue;
+                }
+
                 Mat mat = toMatConverter.convert(frame);
                 if (mat == null || mat.empty()) continue;
 
@@ -158,7 +164,7 @@ public class SeizureVideoCalibrationTest {
                         trackedPeople.remove(bestMatch);
                         matchedPeople.add(bestMatch);
                     } else {
-                        bestMatch = new TrackedPerson(det.bounds);
+                        bestMatch = new TrackedPerson(det.bounds, true);
                         matchedPeople.add(bestMatch);
                     }
                     bestMatch.setLastKeypoints(det.keypoints);

@@ -80,16 +80,22 @@ public class VideoPanel extends JPanel {
                 grabber.start();
 
                 Java2DFrameConverter converter = new Java2DFrameConverter();
+                int frameIdx = 0;
                 while (running) {
                     Frame frame = grabber.grabImage();
                     if (frame == null) break;
 
                     Mat mat = toMatConverter.convert(frame);
                     if (mat != null && !mat.empty()) {
-                        // Run GPU YOLOv8-pose detection (conf: 0.5, iou: 0.45)
-                        List<PoseDetection> detections = yoloDetector.detect(mat, 0.5f, 0.45f);
-                        
-                        updateTracking(mat, detections);
+                        frameIdx++;
+                        if (frameIdx > 1 && frameIdx % 2 == 0) {
+                            // Skip processing entirely on even frames.
+                            // The renderList and trackedPeople remain unchanged, preserving smooth UI rendering.
+                        } else {
+                            // Run GPU YOLOv8-pose detection (conf: 0.5, iou: 0.45)
+                            List<PoseDetection> detections = yoloDetector.detect(mat, 0.5f, 0.45f);
+                            updateTracking(mat, detections);
+                        }
                     }
 
                     BufferedImage img = converter.getBufferedImage(frame);
@@ -158,7 +164,7 @@ public class VideoPanel extends JPanel {
                 trackedPeople.remove(bestMatch);
                 matchedPeople.add(bestMatch);
             } else {
-                bestMatch = new TrackedPerson(det.bounds);
+                bestMatch = new TrackedPerson(det.bounds, true);
                 matchedPeople.add(bestMatch);
             }
             

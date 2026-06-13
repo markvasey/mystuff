@@ -56,6 +56,10 @@ public class VideoTester {
                 Frame frame = grabber.grabImage();
                 if (frame == null) break;
                 frameIdx++;
+
+                if (frameIdx > 1 && frameIdx % 2 == 0) {
+                    continue;
+                }
                 
                 Mat mat = toMatConverter.convert(frame);
                 if (mat == null || mat.empty()) continue;
@@ -86,7 +90,7 @@ public class VideoTester {
                         trackedPeople.remove(bestMatch);
                         matchedPeople.add(bestMatch);
                     } else {
-                        bestMatch = new TrackedPerson(det.bounds);
+                        bestMatch = new TrackedPerson(det.bounds, true);
                         matchedPeople.add(bestMatch);
                     }
                     bestMatch.setLastKeypoints(det.keypoints);
