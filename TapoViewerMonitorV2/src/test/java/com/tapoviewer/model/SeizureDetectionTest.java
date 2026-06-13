@@ -23,7 +23,7 @@ public class SeizureDetectionTest {
 
     @Test
     public void testSeizureRhythmicMovementDetected() {
-        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100));
 
         // Simulate a strong 4 Hz rhythmic shaking at 20 frames per second
         // Fs = 20 Hz, Period = 5 frames.
@@ -32,7 +32,7 @@ public class SeizureDetectionTest {
         double targetFrequency = 4.0; // 4 Hz (in the 2-6 Hz band)
 
         for (int t = 0; t < 70; t++) {
-            double motion = 2.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 2.5;
+            double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
 
@@ -46,14 +46,14 @@ public class SeizureDetectionTest {
 
     @Test
     public void testSlowRhythmicMovementRejected() {
-        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100));
 
         // Simulate a very slow 0.5 Hz rhythmic movement (e.g. breathing or normal body shifts)
         double samplingFrequency = 20.0;
         double targetFrequency = 0.5; // 0.5 Hz (well below the 2-6 Hz band)
 
         for (int t = 0; t < 70; t++) {
-            double motion = 2.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 2.5;
+            double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
 
@@ -62,14 +62,14 @@ public class SeizureDetectionTest {
 
     @Test
     public void testFastRhythmicMovementRejected() {
-        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100));
 
         // Simulate a fast 9.0 Hz rhythmic movement (e.g. camera sensor hum or fan vibrations)
         double samplingFrequency = 20.0;
         double targetFrequency = 9.0; // 9 Hz (well above the 2-6 Hz band)
 
         for (int t = 0; t < 70; t++) {
-            double motion = 2.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 2.5;
+            double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
 
@@ -99,7 +99,7 @@ public class SeizureDetectionTest {
 
     @Test
     public void testSeizureConditionForSnapshots() {
-        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100));
 
         // Under normal circumstances/motion, seizure is not detected
         for (int i = 0; i < 70; i++) {
@@ -111,7 +111,7 @@ public class SeizureDetectionTest {
         double samplingFrequency = 20.0;
         double targetFrequency = 3.5; // 3.5 Hz
         for (int t = 0; t < 70; t++) {
-            double motion = 3.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 4.0;
+            double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
         assertTrue(person.isSeizureDetected(), "Seizure should be detected under rhythmic motion, triggering snapshot capability.");

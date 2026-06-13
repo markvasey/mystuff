@@ -19,7 +19,7 @@ public class TrackedPerson {
     // Unified motion signal history
     private final LinkedList<Double> motionHistory = new LinkedList<>();
     private static final int HISTORY_SIZE = 64; // Power of 2 required for FFT (approx 3.2s at 20fps)
-    private static final double MIN_SEIZURE_MOTION = 10.0; // Noise floor for FFT magnitude
+    private static final double MIN_SEIZURE_MOTION = 50.0; // Noise floor for FFT magnitude
     private static final double DOMINANCE_THRESHOLD = 0.40; // Target band must have at least 40% of AC power
 
     private boolean seizureDetected = false;
@@ -119,11 +119,19 @@ public class TrackedPerson {
 
             if (totalPower > MIN_SEIZURE_MOTION) {
                 double dominance = targetBandPower / totalPower;
+                
+                // Calculate aspect ratio (height / width) to detect standing posture
+                double aspectRatio = 0.0;
+                if (bounds != null && bounds.width > 0) {
+                    aspectRatio = (double) bounds.height / bounds.width;
+                }
+                
                 // Seizure is flagged if:
                 // 1. Dominance threshold is met (>= 40% of AC power in target band)
-                // 2. Peak amplitude is above the threshold (> 5.0)
+                // 2. Peak amplitude is above the threshold (> 25.0)
                 // 3. Peak is a narrow-band spike (PAPR > 2.5) to reject broad-band hyperkinetic thrashing
-                seizureDetected = (dominance >= DOMINANCE_THRESHOLD && maxAmp > 5.0 && this.papr > 2.5);
+                // 4. Person is not standing upright (aspect ratio <= 1.8)
+                seizureDetected = (dominance >= DOMINANCE_THRESHOLD && maxAmp > 25.0 && this.papr > 2.5 && aspectRatio <= 1.8);
             } else {
                 seizureDetected = false;
             }

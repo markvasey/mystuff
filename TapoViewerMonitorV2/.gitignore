@@ -1,4 +1,5 @@
 secret.txt
 target/
 cameras.xml
-TestVideos/
+*.mp4
+*.MP4
