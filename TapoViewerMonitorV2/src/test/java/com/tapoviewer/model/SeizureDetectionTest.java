@@ -116,4 +116,51 @@ public class SeizureDetectionTest {
         }
         assertTrue(person.isSeizureDetected(), "Seizure should be detected under rhythmic motion, triggering snapshot capability.");
     }
+
+    @Test
+    public void testTonicPhaseWarning() {
+        // Create a person without frame skipping (20 fps)
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100), false);
+
+        // Simulate a high-frequency 12 Hz tonic contraction
+        // Fs = 20 Hz, target = 12 Hz. It will alias to 8 Hz in the FFT, which falls in the tonic band (6-10 Hz).
+        double samplingFrequency = 20.0;
+        double targetFrequency = 12.0;
+
+        for (int t = 0; t < 100; t++) {
+            double motion = 30.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 40.0;
+            person.addMotion(motion);
+        }
+
+        // Verify that tonic warning is active but clonic confirmed alarm is false
+        assertTrue(person.isTonicWarning(), "High frequency (12 Hz aliased to 8 Hz) should trigger a tonic warning.");
+        assertTrue(person.isSeizureWarning(), "Tonic warning should elevate to Stage 1 Seizure Warning.");
+        assertFalse(person.isSeizureConfirmed(), "Tonic-only warnings must NOT trigger the Stage 2 confirmed clonic alarm.");
+    }
+
+    @Test
+    public void testTonicToClonicTransition() {
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100), false);
+
+        double samplingFrequency = 20.0;
+
+        // Phase 1: Tonic phase (12 Hz) for 70 frames
+        double tonicFreq = 12.0;
+        for (int t = 0; t < 70; t++) {
+            double motion = 30.0 * Math.sin(2.0 * Math.PI * tonicFreq * (t / samplingFrequency)) + 40.0;
+            person.addMotion(motion);
+        }
+        assertTrue(person.isTonicWarning(), "Should detect early tonic phase.");
+        assertFalse(person.isSeizureConfirmed(), "Stage 2 confirmed alarm should not be active yet.");
+
+        // Phase 2: Transition to clonic shaking (3.5 Hz) for 70 frames
+        double clonicFreq = 3.5;
+        for (int t = 0; t < 70; t++) {
+            double motion = 30.0 * Math.sin(2.0 * Math.PI * clonicFreq * (t / samplingFrequency)) + 40.0;
+            person.addMotion(motion);
+        }
+        // At 20 fps, density window is 300, and confirmation threshold is 10 frames.
+        // After 70 frames of clonic active warning, it must confirm the seizure.
+        assertTrue(person.isSeizureConfirmed(), "Transition to clonic shaking should trigger the Stage 2 confirmed alarm.");
+    }
 }

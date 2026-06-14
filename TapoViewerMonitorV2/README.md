@@ -92,10 +92,19 @@ Comparing the data profiles of the positive seizure and negative control videos 
 *   **Walk Cycles Mimic Seizure Rhythms:** Normal walking/marching (e.g., `GBkJY86tZRE.mp4`) generates a highly rhythmic frequency profile with extremely high narrow-band PAPR (**3.70**), exceeding most true seizures (average PAPR ~2.80). This necessitates the posture aspect ratio guard ($\le 1.8$) to filter out standing/walking activities.
 *   **Frequency Dominance is Key:** Even though normal sleep movements and walking generated high power, their clonic dominance was very low and average frequency was classified at **0.00 Hz** (broad-band chaos). Requiring clonic band dominance $\ge 30\%$ successfully achieved **100% specificity**.
 
-### 5. Future Algorithmic Refinements
-Based on our calibration findings, we have identified two potential future improvements:
-*   **Low-Confidence Occlusion Mode:** For high-occlusion environments (e.g. thick blankets where person frames account for < 30% of total frames), we can dynamically expand the YOLO search bounds and automatically fall back to FFM CUDA optical flow to preserve the motion signal history.
-*   **Tonic-Clonic Phase Transition:** Tonic-clonic seizures typically begin with a high-frequency tonic phase (~10-14 Hz) before transitioning into clonic shaking (~2-5 Hz). Implementing a secondary high-frequency band detector would allow the system to alert caregivers even earlier during the tonic phase.
+### 5. Implemented Algorithmic Refinements
+Based on our calibration findings, we designed and fully implemented two major algorithmic refinements to the seizure detection engine:
+
+*   **Adaptive Tracking Thresholds for High Occlusion (Low-Confidence Occlusion Mode):**
+    *   *Mechanism:* When a person is temporarily undetected by YOLOv8-Pose (e.g., due to thick bedding, blankets, or lighting changes in videos like `prVFEnFBLkU.mp4`), the system relaxes the IoU association threshold from `0.30` to `0.15` to make it easier for subsequent YOLO detections to match the tracked history, preventing tracking resets.
+    *   *CUDA Fallback Expansion:* While the person is undetected (for up to 15 frames of tracking loss buffer), the motion estimation falls back to pixel-level CUDA absolute differences. The system automatically expands the motion bounding box by `25%` (adding `12.5%` on each side) to capture peripheral thrashing and ensure large-amplitude movements are not missed outside the original bounding box.
+*   **Tonic-Clonic Phase Transition Detection:**
+    *   *Mechanism:* Generalized tonic-clonic (GTC) seizures often start with a high-frequency tonic phase (~10–14 Hz) before transitioning into clonic shaking (~2–5 Hz). Because the video frame rate (10 fps or 20 fps) limits the Nyquist frequency to 5 Hz or 10 Hz respectively, the tonic frequencies alias to:
+        *   **6.0–10.0 Hz** at 20 fps (monitored via bins 19–31)
+        *   **3.5–5.0 Hz** at 10 fps (monitored via bins 11–16)
+    *   *Two-Stage Warning Separation:* If a strong, narrow-band rhythmic signal is detected in the tonic band (dominance $\ge 25\text{--}30\%$, max amplitude $> 8.0\text{--}10.0$, PAPR $> 2.0\text{--}2.2$, and horizontal aspect ratio $\le 1.8$), a Stage 1 warning is triggered immediately (`WARNING: TONIC PHASE` displayed in orange on the UI).
+    *   *False Alarm Mitigation:* To prevent high-frequency normal movements (like rapid turning or shifting) from causing false critical alarms, only the clonic warning states (`clonicActive`) are accumulated into the 15-second temporal density queue for Stage 2 (RED box) confirmation. This design ensures that the caregiver is warned early during the tonic phase, while maintaining zero false alarms on the negative control dataset.
+
 
 ---
 

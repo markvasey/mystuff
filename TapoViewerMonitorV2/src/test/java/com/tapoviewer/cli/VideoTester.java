@@ -74,11 +74,12 @@ public class VideoTester {
                 List<TrackedPerson> matchedPeople = new ArrayList<>();
                 for (PoseDetection det : detections) {
                     TrackedPerson bestMatch = null;
-                    double maxIoU = 0.3;
+                    double maxIoU = 0.0;
                     
                     for (TrackedPerson p : trackedPeople) {
+                        double minIoU = p.isDetectedInCurrentFrame() ? 0.3 : 0.15;
                         double iou = calculateIoU(det.bounds, p.getBounds());
-                        if (iou > maxIoU) {
+                        if (iou > minIoU && iou > maxIoU) {
                             maxIoU = iou;
                             bestMatch = p;
                         }
@@ -137,12 +138,14 @@ public class VideoTester {
                     }
                     
                     if (!poseValid) {
-                        // CUDA Optical Flow fallback
                         Rectangle r = p.getBounds();
-                        int x = Math.max(0, r.x);
-                        int y = Math.max(0, r.y);
-                        int w = Math.min(r.width, mat.cols() - x);
-                        int h = Math.min(r.height, mat.rows() - y);
+                        // Expand bounds by 25% if undetected in current frame to capture peripheral thrashing
+                        int expansionX = p.isDetectedInCurrentFrame() ? 0 : (int) (r.width * 0.125);
+                        int expansionY = p.isDetectedInCurrentFrame() ? 0 : (int) (r.height * 0.125);
+                        int x = Math.max(0, r.x - expansionX);
+                        int y = Math.max(0, r.y - expansionY);
+                        int w = Math.min(r.width + 2 * expansionX, mat.cols() - x);
+                        int h = Math.min(r.height + 2 * expansionY, mat.rows() - y);
                         
                         if (w > 0 && h > 0) {
                             Mat region = new Mat(mat, new Rect(x, y, w, h));
@@ -166,9 +169,12 @@ public class VideoTester {
                     
                     p.addMotion(motion);
                     
+                    if (p.isTonicWarning()) {
+                        System.out.printf("[Frame %d] WARNING: TONIC PHASE detected! Peak Frequency: %.2f Hz\n", frameIdx, p.getPeakFrequencyHz());
+                    }
                     if (p.isSeizureDetected()) {
                         seizureCount++;
-                        System.out.printf("[Frame %d] Seizure detected! Peak Frequency: %.2f Hz\n", frameIdx, p.getPeakFrequencyHz());
+                        System.out.printf("[Frame %d] SEIZURE ALARM (CONFIRMED CLONIC ALERT)! Peak Frequency: %.2f Hz\n", frameIdx, p.getPeakFrequencyHz());
                     }
                 }
             }

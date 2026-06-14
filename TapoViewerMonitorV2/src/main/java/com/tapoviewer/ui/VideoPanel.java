@@ -177,11 +177,12 @@ public class VideoPanel extends JPanel {
         
         for (PoseDetection det : detections) {
             TrackedPerson bestMatch = null;
-            double maxIoU = 0.3; // Minimum overlap threshold
+            double maxIoU = 0.0;
             
             for (TrackedPerson p : trackedPeople) {
+                double minIoU = p.isDetectedInCurrentFrame() ? 0.3 : 0.15;
                 double iou = calculateIoU(det.bounds, p.getBounds());
-                if (iou > maxIoU) {
+                if (iou > minIoU && iou > maxIoU) {
                     maxIoU = iou;
                     bestMatch = p;
                 }
@@ -249,10 +250,13 @@ public class VideoPanel extends JPanel {
             // 2. Fallback: CUDA-accelerated motion quantification (under occlusion/blankets)
             if (!poseValid) {
                 Rectangle r = p.getBounds();
-                int x = Math.max(0, r.x);
-                int y = Math.max(0, r.y);
-                int w = Math.min(r.width, fullMat.cols() - x);
-                int h = Math.min(r.height, fullMat.rows() - y);
+                // Expand bounds by 25% if undetected in current frame to capture peripheral thrashing
+                int expansionX = p.isDetectedInCurrentFrame() ? 0 : (int) (r.width * 0.125);
+                int expansionY = p.isDetectedInCurrentFrame() ? 0 : (int) (r.height * 0.125);
+                int x = Math.max(0, r.x - expansionX);
+                int y = Math.max(0, r.y - expansionY);
+                int w = Math.min(r.width + 2 * expansionX, fullMat.cols() - x);
+                int h = Math.min(r.height + 2 * expansionY, fullMat.rows() - y);
                 
                 if (w > 0 && h > 0) {
                     Mat region = new Mat(fullMat, new Rect(x, y, w, h));
@@ -354,7 +358,8 @@ public class VideoPanel extends JPanel {
                     g2.setStroke(new BasicStroke(2.5f));
                     g2.drawRect(rx, ry, rw, rh);
                     g2.setFont(new Font("Arial", Font.BOLD, 12));
-                    g2.drawString("WARNING: SUSPECTED SEIZURE (" + stats + ")", rx, ry - 7);
+                    String warningLabel = person.isTonicWarning() ? "WARNING: TONIC PHASE" : "WARNING: SUSPECTED SEIZURE";
+                    g2.drawString(warningLabel + " (" + stats + ")", rx, ry - 7);
                 } else {
                     g2.setColor(Color.GREEN);
                     g2.setStroke(new BasicStroke(2.0f));

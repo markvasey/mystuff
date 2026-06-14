@@ -40,8 +40,10 @@ public class TrackedPerson {
     private boolean seizureWarning = false;
     private boolean seizureConfirmed = false;
     private boolean seizureDetected = false;
+    private boolean tonicWarning = false;
 
     private int consecutiveSeizureFrames = 0;
+    private int consecutiveTonicFrames = 0;
     private int lastSeenFrames = 0;
     private double cumulativeMotion = 0;
     
@@ -140,6 +142,11 @@ public class TrackedPerson {
             double maxAmp = 0.0;
             int peakBin = 0;
 
+            double tonicBandPower = 0.0;
+            double maxTonicAmp = 0.0;
+            int minTonicBin = frameSkipping ? 11 : 19; // 3.5 Hz @ 10fps, 6.0 Hz @ 20fps
+            int maxTonicBin = frameSkipping ? 16 : (historySize / 2 - 1); // 5.0 Hz @ 10fps, Nyquist @ 20fps
+
             for (int i = 1; i < historySize / 2; i++) {
                 // Magnitude of bin i from packed JTransforms output
                 double amp = Math.hypot(data[2 * i], data[2 * i + 1]);
@@ -152,6 +159,13 @@ public class TrackedPerson {
                         peakBin = i;
                     }
                 }
+
+                if (i >= minTonicBin && i <= maxTonicBin) {
+                    tonicBandPower += amp;
+                    if (amp > maxTonicAmp) {
+                        maxTonicAmp = amp;
+                    }
+                }
             }
 
             // Calculate peak frequency in Hz
@@ -161,8 +175,10 @@ public class TrackedPerson {
             // so they match the magnitude/power thresholds calibrated for the 64-point FFT.
             if (frameSkipping) {
                 maxAmp *= 2.0;
+                maxTonicAmp *= 2.0;
                 totalPower *= 2.0;
                 targetBandPower *= 2.0;
+                tonicBandPower *= 2.0;
             }
 
             this.peakAmplitude = maxAmp;
@@ -171,12 +187,15 @@ public class TrackedPerson {
             // Calculate Peak-to-Average Power Ratio (PAPR) to identify narrow-band oscillations
             double averageAC = totalPower / (historySize / 2 - 1);
             this.papr = (averageAC > 0.001) ? (maxAmp / averageAC) : 0.0;
+            
+            double tonicPapr = (averageAC > 0.001) ? (maxTonicAmp / averageAC) : 0.0;
 
             double dominanceThreshold = frameSkipping ? 0.30 : 0.40;
             double paprThreshold = frameSkipping ? 2.2 : 2.5;
 
             if (totalPower > MIN_SEIZURE_MOTION) {
                 double dominance = targetBandPower / totalPower;
+                double tonicDominance = tonicBandPower / totalPower;
                 
                 // Calculate aspect ratio (height / width) to detect standing posture
                 double aspectRatio = 0.0;
@@ -190,14 +209,24 @@ public class TrackedPerson {
                 } else {
                     consecutiveSeizureFrames = 0;
                 }
+
+                boolean currentFrameTonic = (tonicDominance >= (frameSkipping ? 0.25 : 0.30) && maxTonicAmp > (frameSkipping ? 8.0 : 10.0) && tonicPapr > (frameSkipping ? 2.0 : 2.2) && aspectRatio <= 1.8);
+                if (currentFrameTonic) {
+                    consecutiveTonicFrames++;
+                } else {
+                    consecutiveTonicFrames = 0;
+                }
                 
-                // Stage 1 (Warning): Requires 2 consecutive frames of shaking
-                boolean warningActive = (consecutiveSeizureFrames >= 2);
-                this.seizureWarning = warningActive;
+                // Stage 1 (Warning): Requires 2 consecutive frames of clonic or tonic indicators
+                boolean clonicActive = (consecutiveSeizureFrames >= 2);
+                boolean tonicActive = (consecutiveTonicFrames >= 2);
                 
-                // Slide the warning history queue
-                warningHistory.add(warningActive);
-                if (warningActive) {
+                this.seizureWarning = clonicActive || tonicActive;
+                this.tonicWarning = tonicActive;
+                
+                // Slide the warning history queue - only clonic warnings accumulate for confirmed alarm
+                warningHistory.add(clonicActive);
+                if (clonicActive) {
                     warningFrameCount++;
                 }
                 if (warningHistory.size() > densityWindowSize) {
@@ -207,12 +236,14 @@ public class TrackedPerson {
                     }
                 }
                 
-                // Stage 2 (Confirmed): Warning must be active for >= 5.0 seconds cumulatively
+                // Stage 2 (Confirmed): Warning must be active for >= 0.5 seconds cumulatively
                 this.seizureConfirmed = (warningFrameCount >= confirmationThresholdFrames);
                 this.seizureDetected = this.seizureConfirmed; // For backwards compatibility
             } else {
                 consecutiveSeizureFrames = 0;
+                consecutiveTonicFrames = 0;
                 seizureWarning = false;
+                tonicWarning = false;
                 
                 // Also push false to history to fade out warning count when person stops moving
                 warningHistory.add(false);
@@ -230,6 +261,7 @@ public class TrackedPerson {
         } catch (Exception e) {
             System.err.println("TrackedPerson: FFT analysis failed: " + e.getMessage());
             seizureWarning = false;
+            tonicWarning = false;
             seizureConfirmed = false;
             seizureDetected = false;
         }
@@ -238,6 +270,7 @@ public class TrackedPerson {
     public boolean isSeizureDetected() { return seizureConfirmed; }
     public boolean isSeizureWarning() { return seizureWarning; }
     public boolean isSeizureConfirmed() { return seizureConfirmed; }
+    public boolean isTonicWarning() { return tonicWarning; }
     
     public double getPeakFrequencyHz() { return peakFrequencyHz; }
     public double getPeakAmplitude() { return peakAmplitude; }
