@@ -134,7 +134,7 @@ public class VideoPanel extends JPanel {
                             LocalDateTime now = LocalDateTime.now();
                             if (now.isAfter(lastSnapshotTime.plusSeconds(1))) {
                                 for (TrackedPerson person : renderList) {
-                                    if (!person.isSeizureDetected()) {
+                                    if (!person.isSeizureConfirmed()) {
                                         continue;
                                     }
                                     Rectangle rect = person.getBounds();
@@ -202,7 +202,7 @@ public class VideoPanel extends JPanel {
         
         // Cleanup old people
         for (TrackedPerson p : trackedPeople) {
-            if (p.incrementLastSeen() < 5) {
+            if (p.incrementLastSeen() < 15) {
                 matchedPeople.add(p);
             } else {
                 p.release();
@@ -218,7 +218,7 @@ public class VideoPanel extends JPanel {
             boolean poseValid = false;
             
             // 1. Joint Tracking (extremity velocity)
-            if (p.getLastKeypoints() != null && p.getPrevKeypoints() != null) {
+            if (p.isDetectedInCurrentFrame() && p.getLastKeypoints() != null && p.getPrevKeypoints() != null) {
                 int[] extremityIndices = {9, 10, 15, 16}; // Wrists and ankles
                 float[][] currKpts = p.getLastKeypoints();
                 float[][] prevKpts = p.getPrevKeypoints();
@@ -343,12 +343,18 @@ public class VideoPanel extends JPanel {
                 String stats = String.format("%.1f Hz (Amp: %.1f, Pow: %.1f, PAPR: %.1f)", 
                         person.getPeakFrequencyHz(), person.getPeakAmplitude(), person.getTotalPower(), person.getPapr());
                 
-                if (person.isSeizureDetected()) {
+                if (person.isSeizureConfirmed()) {
                     g2.setColor(Color.RED);
                     g2.setStroke(new BasicStroke(3.0f));
                     g2.drawRect(rx, ry, rw, rh);
                     g2.setFont(new Font("Arial", Font.BOLD, 14));
-                    g2.drawString("SEIZURE DETECTED (" + stats + ")", rx, ry - 7);
+                    g2.drawString("SEIZURE ALARM (CONFIRMED) (" + stats + ")", rx, ry - 7);
+                } else if (person.isSeizureWarning()) {
+                    g2.setColor(Color.ORANGE);
+                    g2.setStroke(new BasicStroke(2.5f));
+                    g2.drawRect(rx, ry, rw, rh);
+                    g2.setFont(new Font("Arial", Font.BOLD, 12));
+                    g2.drawString("WARNING: SUSPECTED SEIZURE (" + stats + ")", rx, ry - 7);
                 } else {
                     g2.setColor(Color.GREEN);
                     g2.setStroke(new BasicStroke(2.0f));

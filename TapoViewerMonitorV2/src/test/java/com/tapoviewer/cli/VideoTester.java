@@ -98,7 +98,7 @@ public class VideoTester {
                 
                 // Cleanup old tracked people
                 for (TrackedPerson p : trackedPeople) {
-                    if (p.incrementLastSeen() < 5) {
+                    if (p.incrementLastSeen() < 15) {
                         matchedPeople.add(p);
                     } else {
                         p.release();
@@ -112,7 +112,7 @@ public class VideoTester {
                     double motion = 0.0;
                     boolean poseValid = false;
                     
-                    if (p.getLastKeypoints() != null && p.getPrevKeypoints() != null) {
+                    if (p.isDetectedInCurrentFrame() && p.getLastKeypoints() != null && p.getPrevKeypoints() != null) {
                         int[] jointIndices = {9, 10, 15, 16}; // wrists & ankles
                         float[][] currKpts = p.getLastKeypoints();
                         float[][] prevKpts = p.getPrevKeypoints();

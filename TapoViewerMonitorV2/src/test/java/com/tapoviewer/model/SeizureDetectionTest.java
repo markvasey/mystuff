@@ -13,7 +13,7 @@ public class SeizureDetectionTest {
         TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 100, 200));
 
         // Simulate normal random movement (low motion and chaotic)
-        for (int i = 0; i < 70; i++) {
+        for (int i = 0; i < 200; i++) {
             double motion = Math.random() * 0.4; // random noise under threshold
             person.addMotion(motion);
         }
@@ -31,7 +31,7 @@ public class SeizureDetectionTest {
         double samplingFrequency = 20.0;
         double targetFrequency = 4.0; // 4 Hz (in the 2-6 Hz band)
 
-        for (int t = 0; t < 70; t++) {
+        for (int t = 0; t < 200; t++) {
             double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
@@ -52,7 +52,7 @@ public class SeizureDetectionTest {
         double samplingFrequency = 20.0;
         double targetFrequency = 0.5; // 0.5 Hz (well below the 2-6 Hz band)
 
-        for (int t = 0; t < 70; t++) {
+        for (int t = 0; t < 200; t++) {
             double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
@@ -68,7 +68,7 @@ public class SeizureDetectionTest {
         double samplingFrequency = 20.0;
         double targetFrequency = 9.0; // 9 Hz (well above the 2-6 Hz band)
 
-        for (int t = 0; t < 70; t++) {
+        for (int t = 0; t < 200; t++) {
             double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }
@@ -102,7 +102,7 @@ public class SeizureDetectionTest {
         TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 100));
 
         // Under normal circumstances/motion, seizure is not detected
-        for (int i = 0; i < 70; i++) {
+        for (int i = 0; i < 200; i++) {
             person.addMotion(Math.random() * 2.0);
         }
         assertFalse(person.isSeizureDetected(), "No seizure should be detected under normal random motion.");
@@ -110,7 +110,7 @@ public class SeizureDetectionTest {
         // Under rhythmic seizure circumstances, seizure is detected
         double samplingFrequency = 20.0;
         double targetFrequency = 3.5; // 3.5 Hz
-        for (int t = 0; t < 70; t++) {
+        for (int t = 0; t < 200; t++) {
             double motion = 20.0 * Math.sin(2.0 * Math.PI * targetFrequency * (t / samplingFrequency)) + 30.0;
             person.addMotion(motion);
         }

@@ -31,7 +31,16 @@ public class TrackedPerson {
     private static final double MIN_SEIZURE_MOTION = 50.0; // Noise floor for FFT magnitude
     private static final double DOMINANCE_THRESHOLD = 0.40; // Target band must have at least 40% of AC power
 
+    // Two-stage seizure validation fields
+    private final java.util.Queue<Boolean> warningHistory = new java.util.LinkedList<>();
+    private final int densityWindowSize;
+    private final int confirmationThresholdFrames;
+    private int warningFrameCount = 0;
+
+    private boolean seizureWarning = false;
+    private boolean seizureConfirmed = false;
     private boolean seizureDetected = false;
+
     private int consecutiveSeizureFrames = 0;
     private int lastSeenFrames = 0;
     private double cumulativeMotion = 0;
@@ -54,11 +63,15 @@ public class TrackedPerson {
             this.resolutionHz = 0.3125; // 10 / 32 = 0.3125 Hz per bin
             this.minBin = 6;            // 2.0 / 0.3125 = 6.4 (bin 6)
             this.maxBin = 14;           // 4.5 / 0.3125 = 14.4 (bin 14)
+            this.densityWindowSize = 300; // 30 seconds @ 10 fps
+            this.confirmationThresholdFrames = 5; // 0.5 seconds
         } else {
             this.historySize = 64;
             this.resolutionHz = 0.3125; // 20 / 64 = 0.3125 Hz per bin
             this.minBin = 6;
             this.maxBin = 15;
+            this.densityWindowSize = 600; // 30 seconds @ 20 fps
+            this.confirmationThresholdFrames = 10; // 0.5 seconds
         }
         this.fft = new DoubleFFT_1D(historySize);
     }
@@ -98,6 +111,8 @@ public class TrackedPerson {
 
     private void analyzeSeizure() {
         if (motionHistory.size() < historySize) {
+            seizureWarning = false;
+            seizureConfirmed = false;
             seizureDetected = false;
             return;
         }
@@ -169,27 +184,60 @@ public class TrackedPerson {
                     aspectRatio = (double) bounds.height / bounds.width;
                 }
                 
-                boolean currentFrameSeizure = (dominance >= dominanceThreshold && maxAmp > 25.0 && this.papr > paprThreshold && aspectRatio <= 2.2);
+                boolean currentFrameSeizure = (dominance >= dominanceThreshold && maxAmp > 25.0 && this.papr > paprThreshold && aspectRatio <= 1.8);
                 if (currentFrameSeizure) {
                     consecutiveSeizureFrames++;
                 } else {
                     consecutiveSeizureFrames = 0;
                 }
                 
-                // Flag seizure if it persists for at least 2 consecutive frames
-                seizureDetected = (consecutiveSeizureFrames >= 2);
+                // Stage 1 (Warning): Requires 2 consecutive frames of shaking
+                boolean warningActive = (consecutiveSeizureFrames >= 2);
+                this.seizureWarning = warningActive;
+                
+                // Slide the warning history queue
+                warningHistory.add(warningActive);
+                if (warningActive) {
+                    warningFrameCount++;
+                }
+                if (warningHistory.size() > densityWindowSize) {
+                    boolean removed = warningHistory.poll();
+                    if (removed) {
+                        warningFrameCount--;
+                    }
+                }
+                
+                // Stage 2 (Confirmed): Warning must be active for >= 5.0 seconds cumulatively
+                this.seizureConfirmed = (warningFrameCount >= confirmationThresholdFrames);
+                this.seizureDetected = this.seizureConfirmed; // For backwards compatibility
             } else {
                 consecutiveSeizureFrames = 0;
-                seizureDetected = false;
+                seizureWarning = false;
+                
+                // Also push false to history to fade out warning count when person stops moving
+                warningHistory.add(false);
+                if (warningHistory.size() > densityWindowSize) {
+                    boolean removed = warningHistory.poll();
+                    if (removed) {
+                        warningFrameCount--;
+                    }
+                }
+                
+                this.seizureConfirmed = (warningFrameCount >= confirmationThresholdFrames);
+                this.seizureDetected = this.seizureConfirmed;
             }
 
         } catch (Exception e) {
             System.err.println("TrackedPerson: FFT analysis failed: " + e.getMessage());
+            seizureWarning = false;
+            seizureConfirmed = false;
             seizureDetected = false;
         }
     }
 
-    public boolean isSeizureDetected() { return seizureDetected; }
+    public boolean isSeizureDetected() { return seizureConfirmed; }
+    public boolean isSeizureWarning() { return seizureWarning; }
+    public boolean isSeizureConfirmed() { return seizureConfirmed; }
     
     public double getPeakFrequencyHz() { return peakFrequencyHz; }
     public double getPeakAmplitude() { return peakAmplitude; }
@@ -203,6 +251,7 @@ public class TrackedPerson {
     
     public int incrementLastSeen() { return ++lastSeenFrames; }
     public void resetLastSeen() { lastSeenFrames = 0; }
+    public boolean isDetectedInCurrentFrame() { return lastSeenFrames == 0; }
     
     public void release() {
         if (lastGrayRegion != null) {

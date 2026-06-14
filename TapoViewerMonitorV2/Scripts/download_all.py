@@ -41,7 +41,14 @@ for subfolder in subfolders:
         print(f"  Found {len(urls)} URLs.")
         
         for url in urls:
-            match = re.search(r"v=([a-zA-Z0-9_-]+)", url)
+            # Match standard v=... query
+            match = re.search(r"v=([a-zA-Z0-9_-]{11})", url)
+            if not match:
+                # Match youtu.be/... short url
+                match = re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", url)
+            if not match:
+                # Match youtube.com/shorts/... url
+                match = re.search(r"shorts/([a-zA-Z0-9_-]{11})", url)
             if not match:
                 continue
             video_id = match.group(1)
