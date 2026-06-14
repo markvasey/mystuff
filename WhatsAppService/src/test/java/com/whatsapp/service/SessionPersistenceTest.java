@@ -7,6 +7,7 @@ import it.auties.whatsapp.api.WebOptionsBuilder;
 import it.auties.whatsapp.controller.ControllerSerializer;
 import it.auties.whatsapp.model.jid.Jid;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,7 @@ public class SessionPersistenceTest {
     private static final String TARGET_PHONE = "447557986809"; 
 
     @Test
+    @Disabled("Manual integration test requiring live WhatsApp connection and interactive console input")
     public void testResilientSending() throws Exception {
         // HYPOTHESIS: Dropbox file locking is corrupting the session.
         // We will try to copy the existing session to a local temporary folder.

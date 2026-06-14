@@ -38,13 +38,12 @@ public class WhatsAppClient {
             return optional.get();
         } else {
             System.out.println("[Client] Initializing new session...");
-            return builder.firstConnection();
+            return builder.newConnection(sessionName);
         }
     }
 
     public void start(WebOptionsBuilder options, String phone) {
         this.apiFuture = options
-                .historySetting(WebHistorySetting.discard(true))
                 .errorHandler(createErrorHandler())
                 .unregistered(qr -> {
                     System.out.println("\n[Client] QR CODE REQUIRED. Please scan:");
@@ -54,7 +53,13 @@ public class WhatsAppClient {
                     System.out.println("[Client] Session authenticated.");
                     loginFuture.complete(null);
                 })
-                .connect();
+                .connect()
+                .thenApply(whatsapp -> {
+                    whatsapp.addDisconnectedListener(reason -> {
+                        System.err.println("[Client WA Event] Socket disconnected. Reason: " + reason);
+                    });
+                    return whatsapp;
+                });
     }
 
     public void awaitHandshake(long timeout, TimeUnit unit) throws Exception {
@@ -78,11 +83,16 @@ public class WhatsAppClient {
 
     private ErrorHandler createErrorHandler() {
         return (client, location, err) -> {
-            if (err != null && err.getMessage() != null && err.getMessage().contains("protocolType")) {
-                return ErrorHandler.Result.DISCARD;
+            System.err.printf("[Client WA Event] Error at %s: %s%n", location, err != null ? err.getMessage() : "null");
+            if (location == ErrorHandler.Location.STREAM || location == ErrorHandler.Location.LOGIN) {
+                return ErrorHandler.Result.RECONNECT; // Recover on connection or login drops/timeouts
             }
-            return ErrorHandler.Result.DISCARD; // Keep lean
+            return ErrorHandler.Result.DISCARD; // Discard non-fatal message parsing or state errors
         };
+    }
+
+    public boolean isConnected() {
+        return api != null && api.isConnected();
     }
 
     public CompletableFuture<? extends MessageInfo<?>> sendMessage(String phone, String text) {

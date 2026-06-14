@@ -8,5 +8,5 @@ export PATH=$JAVA_HOME/bin:$PATH
 # Run using the absolute path to the jar
 java --add-opens java.base/java.lang=ALL-UNNAMED \
      --add-opens java.base/java.lang.reflect=ALL-UNNAMED \
-     -Dorg.slf4j.simpleLogger.defaultLogLevel=info \
+     -Dorg.slf4j.simpleLogger.defaultLogLevel=debug \
      -jar "$SCRIPT_DIR/target/whatsapp-service-1.0-SNAPSHOT.jar"

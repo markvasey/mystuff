@@ -37,6 +37,14 @@ public class WhatsAppOrchestrator {
             throw new IllegalArgumentException("Invalid account index");
         }
 
+        // Wait up to 5 seconds for connection if temporarily disconnected
+        int retries = 0;
+        while (!client.isConnected() && retries < 10) {
+            System.out.println("[Orchestrator] Waiting for connection (retrying in 500ms)...");
+            Thread.sleep(500);
+            retries++;
+        }
+
         client.sendMessage(account.phone(), message)
                 .thenAccept(info -> System.out.println(">>> Sent: " + info.id()))
                 .get(20, TimeUnit.SECONDS);

@@ -8,7 +8,8 @@ public class WhatsAppCLI {
 
     public static void main(String[] args) {
         AccountManager accountManager = new AccountManager();
-        WhatsAppClient client = new WhatsAppClient(Path.of("sessions"));
+        Path sessionsPath = Path.of(System.getProperty("user.home"), ".whatsapp_service_sessions");
+        WhatsAppClient client = new WhatsAppClient(sessionsPath);
         WhatsAppOrchestrator orchestrator = new WhatsAppOrchestrator(client, accountManager);
 
         try {
@@ -25,6 +26,7 @@ public class WhatsAppCLI {
             while (true) {
                 var accounts = accountManager.getAccounts();
                 System.out.println("\n--- WhatsApp CLI ---");
+                System.out.println("Status: " + (client.isConnected() ? "CONNECTED" : "DISCONNECTED"));
                 for (int i = 0; i < accounts.size(); i++) {
                     System.out.printf("%d. %s (%s)%n", i + 1, accounts.get(i).name(), accounts.get(i).phone());
                 }
