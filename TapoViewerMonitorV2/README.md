@@ -72,8 +72,8 @@ To suppress transient false alarms (such as rolls or stretches in bed) while pro
 ### 1. Two-Stage Alert Architecture
 Instead of immediately triggering a critical alarm from a single brief clonic match, the system separates alerts into:
 *   **Stage 1: Suspected Seizure (Warning — ORANGE BOX):** Triggered when the core FFT frequency analysis (clonic band dominance $\ge 30\%$, peak amplitude $> 25.0$, and PAPR $> 2.2$) is satisfied for at least **2 consecutive processed frames**.
-*   **Stage 2: Confirmed Seizure (Alarm — RED BOX):** Triggered when the Warning state has been active for a cumulative total of **$\ge 0.5$ seconds** (5 frames @ 10 fps, or 10 frames @ 20 fps) within the last **30 seconds** (300 processed frames of history).
-*   **UI & Snapshot Filtering:** Renders an Orange Warning Box for Stage 1, a thick Red Alarm Box for Stage 2, and restricts off-heap JPEG snapshot captures strictly to Stage 2 (Confirmed) states, completely eliminating false snapshots in the history pane.
+*   **Stage 2: Confirmed Seizure (Alarm — RED BOX):** Triggered when the Warning state has been active for a cumulative total of **$\ge 0.5$ seconds** (5 frames @ 10 fps, or 10 frames @ 20 fps) within the last **15 seconds** (150 processed frames of history @ 10 fps, or 300 @ 20 fps).
+*   **UI & Snapshot Filtering:** Renders an Orange Warning Box for Stage 1, a thick Red Alarm Box for Stage 2, and restricts off-heap JPEG snapshot captures strictly to Stage 2 (Confirmed) states. This allows the system to trigger in under 1 second of continuous shaking, while providing a 15-second buffer to prevent alarms from flickering off during pauses between clonic contractions.
 
 ### 2. Core Bug Fixes
 *   **Stale Keypoint Displacement Prevention:** We added the `isDetectedInCurrentFrame()` check. When a person is temporarily undetected (e.g. under thick blankets), the system stops calculating displacement using stale coordinates (which previously repeated the last seen motion vector, clogging the FFT window with a constant value and disabling detection). It now correctly falls back to CUDA pixel-difference optical flow on undetected frames.
@@ -85,6 +85,17 @@ The entire expanded video dataset—comprising **36 videos** with **62.63 minute
 *   **Overall Build Time:** **12 minutes 32 seconds** for all 36 videos (~107k frames total, with ~53k frames fully processed).
 *   **Specificity (Negative Controls):** **100% Specificity** across 16 negative control videos. The standing posture-aspect filter successfully ignored walk cycle animations and normal activities with **zero false alarms**.
 *   **Sensitivity (Positive Controls):** **100% Sensitivity** across all qualified clinical seizure videos. The test suite dynamically skipped assertions for short YouTube Shorts (< 400 frames) or low-density tracking clips (< 200 frames, < 35% density) where a sustained density filter cannot mathematically run, ensuring a highly robust yet flexible verification pipeline.
+
+### 4. Telemetry-Based Medical & Signal Insights
+Comparing the data profiles of the positive seizure and negative control videos yielded the following core insights:
+*   **Kinetic Energy is Not a Seizure Indicator:** Normal adjustments in sleep (e.g., `1bKhFqYrBQQ.mp4` Max Power: **32,513**) generate equal or greater kinetic energy than true seizures (`seizure_video.mp4` Max Power: **12,236**). Absolute amplitude or power limits alone are highly prone to false positives from normal turning or stretching.
+*   **Walk Cycles Mimic Seizure Rhythms:** Normal walking/marching (e.g., `GBkJY86tZRE.mp4`) generates a highly rhythmic frequency profile with extremely high narrow-band PAPR (**3.70**), exceeding most true seizures (average PAPR ~2.80). This necessitates the posture aspect ratio guard ($\le 1.8$) to filter out standing/walking activities.
+*   **Frequency Dominance is Key:** Even though normal sleep movements and walking generated high power, their clonic dominance was very low and average frequency was classified at **0.00 Hz** (broad-band chaos). Requiring clonic band dominance $\ge 30\%$ successfully achieved **100% specificity**.
+
+### 5. Future Algorithmic Refinements
+Based on our calibration findings, we have identified two potential future improvements:
+*   **Low-Confidence Occlusion Mode:** For high-occlusion environments (e.g. thick blankets where person frames account for < 30% of total frames), we can dynamically expand the YOLO search bounds and automatically fall back to FFM CUDA optical flow to preserve the motion signal history.
+*   **Tonic-Clonic Phase Transition:** Tonic-clonic seizures typically begin with a high-frequency tonic phase (~10-14 Hz) before transitioning into clonic shaking (~2-5 Hz). Implementing a secondary high-frequency band detector would allow the system to alert caregivers even earlier during the tonic phase.
 
 ---
 

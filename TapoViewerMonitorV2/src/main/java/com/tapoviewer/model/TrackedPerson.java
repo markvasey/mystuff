@@ -63,14 +63,14 @@ public class TrackedPerson {
             this.resolutionHz = 0.3125; // 10 / 32 = 0.3125 Hz per bin
             this.minBin = 6;            // 2.0 / 0.3125 = 6.4 (bin 6)
             this.maxBin = 14;           // 4.5 / 0.3125 = 14.4 (bin 14)
-            this.densityWindowSize = 300; // 30 seconds @ 10 fps
+            this.densityWindowSize = 150; // 15 seconds @ 10 fps
             this.confirmationThresholdFrames = 5; // 0.5 seconds
         } else {
             this.historySize = 64;
             this.resolutionHz = 0.3125; // 20 / 64 = 0.3125 Hz per bin
             this.minBin = 6;
             this.maxBin = 15;
-            this.densityWindowSize = 600; // 30 seconds @ 20 fps
+            this.densityWindowSize = 300; // 15 seconds @ 20 fps
             this.confirmationThresholdFrames = 10; // 0.5 seconds
         }
         this.fft = new DoubleFFT_1D(historySize);
