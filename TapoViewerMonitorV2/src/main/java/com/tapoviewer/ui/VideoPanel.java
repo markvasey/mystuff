@@ -38,6 +38,7 @@ public class VideoPanel extends JPanel {
     private final boolean ownsDetector;
     private String cameraName = "Tapo Camera";
     private boolean selected = false;
+    private String connectionError = null;
 
     private final OpenCVFrameConverter.ToMat toMatConverter = new OpenCVFrameConverter.ToMat();
     private final List<TrackedPerson> trackedPeople = new ArrayList<>();
@@ -83,6 +84,7 @@ public class VideoPanel extends JPanel {
 
     public void play(String ip, int port, String stream, String username, String password, boolean useGpuDecode) {
         stop(); // Ensure any previous stream is stopped
+        this.connectionError = "Connecting...";
 
         // Suppress FFmpeg noise
         org.bytedeco.ffmpeg.global.avutil.av_log_set_level(org.bytedeco.ffmpeg.global.avutil.AV_LOG_ERROR);
@@ -108,6 +110,7 @@ public class VideoPanel extends JPanel {
                 while (running) {
                     Frame frame = grabber.grabImage();
                     if (frame == null) break;
+                    connectionError = null; // Successful connection!
 
                     Mat mat = toMatConverter.convert(frame);
                     if (mat != null && !mat.empty()) {
@@ -159,6 +162,8 @@ public class VideoPanel extends JPanel {
                 }
             } catch (Exception e) {
                 logger.error("JavaCV Error: {}", e.getMessage());
+                connectionError = formatConnectionError(e.getMessage());
+                repaint();
             } finally {
                 cleanup();
             }
@@ -363,6 +368,9 @@ public class VideoPanel extends JPanel {
             g2.setColor(Color.LIGHT_GRAY);
             g2.setFont(new Font("Arial", Font.BOLD, 14));
             String status = cameraName + " (Offline)";
+            if (connectionError != null) {
+                status = cameraName + " (" + connectionError + ")";
+            }
             FontMetrics fm = g2.getFontMetrics();
             int sx = (getWidth() - fm.stringWidth(status)) / 2;
             int sy = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
@@ -442,6 +450,33 @@ public class VideoPanel extends JPanel {
         trackedPeople.clear();
         renderList.clear();
         repaint();
+    }
+
+    private String formatConnectionError(String msg) {
+        if (msg == null) return "Offline";
+        if (msg.contains("-808465656") || msg.contains("-825242872") || msg.contains("401 Unauthorized") || msg.contains("Unauthorized")) {
+            return "Offline: Unauthorized (401)";
+        }
+        if (msg.contains("Connection timed out") || msg.contains("-110") || msg.contains("timeout")) {
+            return "Offline: Timeout";
+        }
+        if (msg.contains("Connection refused") || msg.contains("-111")) {
+            return "Offline: Connection Refused";
+        }
+        if (msg.contains("Host is unreachable") || msg.contains("-113")) {
+            return "Offline: Host Unreachable";
+        }
+        if (msg.contains("404 Not Found") || msg.contains("Server returned 404")) {
+            return "Offline: Stream Route Not Found (404)";
+        }
+        if (msg.contains("400 Bad Request") || msg.contains("Server returned 400")) {
+            return "Offline: Bad Request (400)";
+        }
+        if (msg.contains("avformat_open_input() error")) {
+            int idx = msg.indexOf("avformat_open_input()");
+            return "Offline: " + msg.substring(idx);
+        }
+        return "Offline: " + msg;
     }
 
     public void release() {
