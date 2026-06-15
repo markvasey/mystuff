@@ -462,7 +462,9 @@ def main():
 
             if batch_idx % 100 == 0:
                 elapsed = time.time() - start_time
-                print(f"Epoch {epoch} | Batch {batch_idx}/{len(train_loader)} | Loss: {loss.item():.4f} | LR: {lr:.2e} | Speed: {batch_idx * args.batch_size / elapsed:.1f} tok/s")
+                seq_per_sec = (batch_idx * args.batch_size) / elapsed if elapsed > 0 else 0.0
+                tok_per_sec = seq_per_sec * args.block_size
+                print(f"Epoch {epoch} | Batch {batch_idx}/{len(train_loader)} | Loss: {loss.item():.4f} | LR: {lr:.2e} | Speed: {seq_per_sec:.1f} seq/s ({tok_per_sec:.0f} tok/s)")
 
         avg_train_loss = total_loss / len(train_loader)
         
