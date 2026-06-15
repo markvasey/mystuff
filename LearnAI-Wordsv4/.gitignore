@@ -59,6 +59,9 @@ Models/
 Training/TinyStories/100_children_stories.txt
 Training/TinyStories/1000_children_stories.txt
 Training/TinyStories/5000_children_stories.txt
+Training/TinyStories/children_stories.txt
+Training/TinyStories_200k/children_stories_200k.txt
+
 *.so
 
 # Python virtual environment and cache

@@ -1,6 +1,6 @@
 #!/bin/bash
 venv/bin/python train.py \
-  --training_dir Training/FictionalLiterature \
+  --training_dir Training/TinyStories \
   --tokenizer_path tokenizer.bin \
   --target_vocab_size 8192 \
   --d_model 512 \
