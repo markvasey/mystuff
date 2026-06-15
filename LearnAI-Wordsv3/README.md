@@ -11,6 +11,7 @@ This project implements the **Hybrid Approach**:
 ## 🚀 Key Advantages & Architectural Shifts
 
 *   **Removal of Hand-Crafted C++/CUDA**: The `src/main/native` C++ code, JNI/FFM bindings (`CudaBridge.java`), and custom allocations (`GpuMatrix.java`) are replaced entirely by Microsoft's ONNX Runtime.
+*   **Native Hardware Delegation (cuBLAS & CUDA)**: Under the hood, the ONNX Runtime does not duplicate graphics or math libraries. Instead, it utilizes an **Execution Provider (EP)** architecture. On systems with an NVIDIA GPU, it automatically binds directly to NVIDIA's native proprietary libraries (such as **cuBLAS** for high-speed matrix multiplications and **cuDNN** for neural network modules) compiled directly in optimized C++ binaries. Java merely acts as an orchestrator, passing memory pointers via thin JNI wrappers so that the entire computation runs at raw hardware speeds without JVM memory or execution overhead.
 *   **Standardized Transformer Architecture**: The model is trained using standard PyTorch modules (`nn.MultiheadAttention`, `nn.LayerNorm`, and `nn.Linear`), allowing multi-head self-attention and non-linear MLP blocks (GELU) that were extremely complex to hand-code in CUDA.
 *   **Dynamic Sequence Length**: The exported ONNX model uses dynamic axes, allowing the Java CLI to run inference on prompts of any sequence length (up to the trained `block_size`).
 *   **Identical Tokenization**: BPE Tokenizer training and encoding logic is kept identical and compatible between Python ([tokenizer.py](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv3/tokenizer.py)) and Java ([BPETokenizer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv3/src/main/java/com/learnai/words/tokenizer/BPETokenizer.java)), enabling zero-friction vocabulary serialization.
@@ -107,7 +108,8 @@ A direct comparison of training the **Fictional Literature** dataset (2.69M toke
 | **Best Val Loss (Epoch 5)** | — (uncalculated) | **`3.4134`** | Stronger early convergence |
 | **Best Val Loss (Epoch 11)** | — | **`2.8899`** | Deep semantic compression |
 | **Best Val Loss (Epoch 14)** | — | **`2.7255`** | Advanced syntactic modeling |
-| **Best Val Loss (Epoch 40)** | `4.3553` | **`< 2.65`** (estimated) | Beat v2's best score by Epoch 5 |
+| **Best Val Loss (Epoch 30)** | — | **`2.2892`** | High coherence, complex clauses |
+| **Best Val Loss (Epoch 40)** | `4.3553` | **`< 2.20`** (estimated) | Beat v2's best score by Epoch 5 |
 
 ### 2. Dialogue & Character Learning Insights (by Epoch 5)
 
@@ -158,13 +160,41 @@ f]
 *   **Abstract & Sophisticated Vocabulary**: The model successfully handles and places complex abstract nouns (like `"ingratitude"`) alongside concrete descriptions (`"instrument"`, `"owner"`).
 *   **Complex Sentence Structures**: The generation showcases sophisticated syntactic structures, including an appositive clause (`The ingratitude, the fingers of his owner...`), parallel subject groupings (`and his eyes, and his head...`), and a conditional adverbial clause (`as if he were lying...`).
 
-### 5. Architectural Drivers of v3's Efficiency (Why it is 10x Smarter)
+### 5. High-Coherence Narrative & Relative Clauses (by Epoch 29)
+
+By Epoch 29, the validation loss dropped to **`2.3118`** (reducing the model's word prediction uncertainty pool to only ~10 words). A generated text sample illustrates the progression to narrative flow and sentence diversity:
+
+```text
+Sample (Epoch 29): [The ----<UNK>
+
+<UNK>Inday!<UNK> cried the King, whose words were gathered round the
+shoulders of a very best class, but it was a very good spot in the street
+where of children<UNK>s compos]
+```
+
+*   **Complex Relative Clauses**: The model successfully uses relative pronouns (`whose words were...`) and relative clauses, demonstrating an understanding of sentence structure and attribution.
+*   **Multi-Word Possessives**: Punctuation matching extends to complex possessive structures like `children<UNK>s` (`children’s`).
+*   **Dialogue Interjection**: The model handles direct exclamation dialogue (`<UNK>Inday!<UNK> cried the King...`) with appropriate quotes and syntax.
+
+### 6. Architectural Drivers of v3's Efficiency (Why it is 10x Smarter)
 
 While the parameter count of `v3` is only **32.7% larger** than `v2` (4.27M vs 3.22M), `v3` converges in a fraction of the time to a much lower loss. The secret behind this efficiency lies in three core architectural features:
 
 *   **Tied Embeddings & LM Head (Weight Tying)**: In `v2`, the input token embeddings and output Language Model Head were two separate matrices (each containing 1.05M parameters). In `v3`, these weights are shared (tied). Weight tying forces the model to map words to a semantic space aligned directly with word predictions, speeding up convergence and preventing representation mismatch. Without weight tying, `v3` would require 5.3M parameters.
 *   **GELU MLP ($256 \to 1024 \to 256$) vs. Single Linear Layer**: The feed-forward path in `v2` was a simple linear projection with no non-linear activation function. Multiple linear operations collapse mathematically into a single linear mapping, severely limiting the model's feature-combining capabilities. `v3` introduces an actual MLP with a **GELU activation** and $4\times$ hidden state expansion, functioning as a non-linear logic gate to learn complex grammar rules.
 *   **4-Head vs. Single-Head Attention**: While `v2`'s single attention head was forced to compromise on a single context spotlight per token, `v3`'s 4 heads divide the hidden representation into independent subspaces, enabling the model to track 4 distinct relationships (e.g. subject, object, verb tense, and punctuation context) simultaneously.
+
+### 7. File Size & Weight Serialization Breakdown
+
+At first glance, the new files (`checkpoint.pt` at ~52.4 MB and `model.onnx` + `model.onnx.data` at ~18.3 MB) seem much larger than `v2`'s `model.bin` (~38.13 MB). However, a breakdown of what these files store shows that the active inference weights are actually very close in size:
+
+*   **Active Inference Weights (ONNX vs. v2 `model.bin`)**:
+    *   **`v2`'s `model.bin`**: **38.13 MB** (bundled model weights + Adam optimizer states).
+    *   **`v3`'s `model.onnx` + `model.onnx.data`**: **18.3 MB** (active weights only).
+    *   *The Math*: In `v2`, the actual inference weights were only **12.88 MB** ($3,220,992 \text{ parameters} \times 4\text{ bytes}$). The remaining 25.24 MB was occupied by Adam optimizer states ($m$ and $v$ momentum vectors). In `v3`, the active inference weights are **17.1 MB** ($4,273,664 \text{ parameters} \times 4\text{ bytes}$), meaning the active model size only increased by ~33% (matching the parameter capacity scale-up).
+*   **The Training Checkpoint (`checkpoint.pt` at ~52.4 MB)**:
+    *   This file is used exclusively by PyTorch to pause and resume training.
+    *   It contains the **active model weights** (17.1 MB) + the **AdamW optimizer states** ($2 \times 17.1\text{ MB} = 34.2\text{ MB}$) + training metadata (epoch numbers and loss logs). If `v2` had the same parameter capacity, its training checkpoint file would be identical in size.
 
 ---
 
