@@ -309,18 +309,38 @@ def main():
     print(f"Vocabulary size: {tokenizer.vocab_size}")
 
     # 3. Create datasets & dataloaders
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Training on device: {device}")
+    
+    # Enable TF32 Tensor Cores for any remaining FP32 matmuls on Ampere/Ada Lovelace
+    if device.type == "cuda":
+        torch.set_float32_matmul_precision('high')
+        
     dataset = CorpusDataset(token_ids, args.block_size, stride=args.stride)
     # 90/10 train/validation split
     train_size = int(0.9 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False)
+    use_cuda = (device.type == "cuda")
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        drop_last=True,
+        pin_memory=use_cuda,
+        num_workers=2 if use_cuda else 0
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        drop_last=False,
+        pin_memory=use_cuda,
+        num_workers=2 if use_cuda else 0
+    )
     
     # 4. Initialize model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Training on device: {device}")
     model = CausalTransformer(
         vocab_size=tokenizer.vocab_size,
         d_model=args.d_model,
@@ -333,6 +353,13 @@ def main():
     # Count parameters
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {params:,}")
+
+    # Compile the model for PyTorch 2.x optimized JIT execution (Kernel Fusion + Triton)
+    if device.type == "cuda":
+        print("Compiling model graph using torch.compile()...")
+        compiled_model = torch.compile(model)
+    else:
+        compiled_model = model
 
     def get_lr(step, max_steps, warmup_steps, lr_max, lr_min):
         # 1. Linear warmup
@@ -348,24 +375,31 @@ def main():
     # Filter parameters for weight decay exclusion
     decay = set()
     no_decay = set()
-    whitelist_weight_modules = (nn.Linear,)
-    blacklist_weight_modules = (nn.LayerNorm, RMSNorm, nn.Embedding)
     
-    for mn, m in model.named_modules():
-        for pn, p in m.named_parameters():
-            fpn = f"{mn}.{pn}" if mn else pn
-            if pn.endswith('bias'):
-                # all biases are excluded from weight decay
-                no_decay.add(fpn)
-            elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+    # Iterate over unique parameters in named_parameters() to avoid duplicates from tied weights (e.g. lm_head.weight and wte.weight)
+    for pn, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        if pn.endswith('bias'):
+            # all biases are excluded from weight decay
+            no_decay.add(pn)
+        elif pn.endswith('weight'):
+            # Find the submodule that owns this parameter to check its type
+            if '.' in pn:
+                submodule_path, _ = pn.rsplit('.', 1)
+                m = model.get_submodule(submodule_path)
+            else:
+                m = model
+            
+            if isinstance(m, nn.Linear):
                 # weights of Linear modules are decayed
-                decay.add(fpn)
-            elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                decay.add(pn)
+            elif isinstance(m, (nn.LayerNorm, RMSNorm, nn.Embedding)):
                 # weights of Norm/Embeddings are excluded from decay
-                no_decay.add(fpn)
+                no_decay.add(pn)
 
     # Validate that we got all parameters
-    param_dict = {pn: p for pn, p in model.named_parameters()}
+    param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
     inter_params = decay & no_decay
     union_params = decay | no_decay
     assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
@@ -398,6 +432,9 @@ def main():
     warmup_steps = int(0.05 * total_steps)  # 5% warmup
     lr_min = args.lr * 0.1  # decay down to 10%
 
+    device_type = "cuda" if "cuda" in str(device) else "cpu"
+    enable_amp = (device.type == "cuda")
+
     # 6. Training loop
     for epoch in range(start_epoch, args.epochs + 1):
         model.train()
@@ -412,9 +449,10 @@ def main():
 
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
-            logits = model(x)
-            # Flatten logits and targets
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+            with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=enable_amp):
+                logits = compiled_model(x)
+                # Flatten logits and targets
+                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -432,8 +470,9 @@ def main():
         with torch.no_grad():
             for x, y in val_loader:
                 x, y = x.to(device), y.to(device)
-                logits = model(x)
-                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+                with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=enable_amp):
+                    logits = compiled_model(x)
+                    loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
         

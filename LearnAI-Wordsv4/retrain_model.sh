@@ -13,8 +13,8 @@ venv/bin/python train.py \
   --n_kv_head 2 \
   --n_layer 12 \
   --block_size 1024 \
-  --stride 10 \
+  --stride 512 \
   --epochs 40 \
-  --batch_size 64 \
+  --batch_size 8 \
   --lr 0.0003 \
   --export_onnx model.onnx
