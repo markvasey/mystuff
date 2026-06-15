@@ -8,7 +8,7 @@ venv/bin/python train.py \
   --n_layer 4 \
   --block_size 256 \
   --stride 10 \
-  --epochs 40 \
+  --epochs 80 \
   --batch_size 64 \
   --lr 0.0003 \
   --export_onnx model.onnx
