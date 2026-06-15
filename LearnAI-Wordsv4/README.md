@@ -229,6 +229,13 @@ Loss
     As training progresses, the model has learned all the general language rules it can extract. To push its Training Loss even lower, it begins to memorize specific stories, names, and exact phrasing word-for-word.
     Because validation stories are unseen, this memorization does not help the model. In fact, it actively hurts: the model starts expecting the exact wording of a memorized training story to appear in a validation story, leading to wrong predictions and causing the **Validation Loss to climb back up**.
 
+> [!NOTE]
+> **Live Case Study (TinyStories Run #1)**:
+> This divergence was observed directly between Epoch 17 and Epoch 20:
+> *   **Epoch 17 (Peak Generalization)**: Train Loss was `0.1314` and Val Loss hit its lowest point at `0.7150` (PPL: `2.04`). The generated text was highly coherent and grammatically correct.
+> *   **Epoch 20 (Overfitting/Memorizing)**: Train Loss plummeted further to `~0.07` (with individual batches dropping to `0.0488`), but Val Loss climbed back up.
+> *   **Symptom**: The model's predictions on unseen sequences degraded. It began hallucinating abstract names (*"Time"*, *"Hurry"*) and making pronoun/syntax slips as it tried to force-fit pieces of memorized training stories into new validation prompts.
+
 #### 🛡️ Early Stopping & Optimal Weight Restoration
 To prevent memorization from corrupting the final model:
 *   The training script constantly monitors the validation loss and saves the model's weights at the absolute bottom of the validation "U-curve" (the point of maximum generalization).
@@ -423,8 +430,8 @@ We log our active TinyStories training runs below. This log will be updated as t
 
 | Run ID | Dataset File | Vocab Size | Epochs | Best Val Loss (Perplexity) | Status / Notes |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Run #1** | `children_stories.txt` (50k) | 8,192 | 80 (Target) | **0.7150 (2.04)** | **Active** (Running, Epoch 17+) |
-| **Run #2** | `children_stories_200k.txt` (200k) | 8,192 | 40 (Target) | *Pending* | **Queue** (Dataset downloaded and isolated in `Training/TinyStories_200k`) |
+| **Run #1** | `children_stories.txt` (50k) | 8,192 | 20 (Early Stop) | **0.7150 (2.04)** | **Completed** (Best weights restored from Epoch 17) |
+| **Run #2** | `children_stories_200k.txt` (200k) | 8,192 | 40 (Target) | *Pending* | **Active** (Running, tokenizer training/dataset cache build starting) |
 
 ### 4. Run #1 Detailed Epoch Progression (50k Dataset)
 The following table documents the loss, perplexity, and qualitative improvements of the model during its training on `children_stories.txt` (approx. 11.5M tokens, ~367s per epoch):
@@ -446,5 +453,16 @@ The following table documents the loss, perplexity, and qualitative improvements
 | **15** | 0.1790 | 0.7223 | 2.06 | `[The --- Story 7248 --- Once upon a time...]` | Validation loss hits 0.72 (Perplexity 2.06). Excellent mystery hook generated (Sarah, three years old, spotting something strange in the mailbox). |
 | **16** | 0.1537 | 0.7188 | 2.05 | `[The Once spiders lived, he liked to explore...]` | Validation loss hits 0.71 (Perplexity 2.05). Model starts learning poetic rhythm/rhyme ("explore"/"door"), but shows slight semantic slips ("pile of chamber", singular pronoun "he" for plural "spiders"). |
 | **17** | 0.1314 | 0.7150 | 2.04 | `[The -- Story 21647 --- Once upon a time...]` | Validation loss hits 0.715 (Perplexity 2.04). Highly natural setting and sensory description ("loved to eat spicy food, even though it made her mouth feel hot"). Showed a tiny hyphen formatting slip (`--` instead of `---` at header start). |
+| **18** | 0.1114 | 0.7174 | 2.05 | `[The Hurry was embarrassed because he...]` | Validation loss fails to improve (`0.7174` vs `0.7150`), triggering **1/3 patience** of early stopping. Model begins displaying signs of overfitting (hallucinating "Hurry" as a proper name, and minor semantic phrasing error: "cut them slide down from the slide"). |
+| **19** | 0.0937 | 0.7182 | 2.05 | `[The Time had been busy zipping outside...]` | Validation loss fails to improve (`0.7182` vs `0.7150`), triggering **2/3 patience** of early stopping. Model produces highly poetic and creative prose ("dizzy winding of the mist", "mist was still shining"), but personifies the abstract noun "Time" as a character ("Time... She slid down the street"). |
+| **20** | 0.0789 | 0.7199 | 2.05 | `[Once there was a little girl named Jen...]` | Validation loss fails to improve (`0.7199` vs `0.7150`), triggering **3/3 patience** of early stopping. Training terminates immediately. Final exported `model.onnx` is compiled using the best saved weights from **Epoch 17** (Val Loss: `0.7150`). |
+
+### 5. Run #2 Detailed Epoch Progression (200k Dataset)
+The following table documents the loss, perplexity, and qualitative improvements of the model during its training on `children_stories_200k.txt` (approx. 40-45M tokens, batch size 8, stride 512, block size 1024, ~367s per batch of 8 seq, ~25 minutes per epoch):
+
+| Epoch | Train Loss | Val Loss | Perplexity ($e^{\text{Loss}}$) | Generated Sample Snippet | Learning Milestones & Observations |
+| :---: | :---: | :---: | :---: | :--- | :--- |
+| **1** | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* |
+
 
 

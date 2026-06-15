@@ -245,7 +245,7 @@ def clean_corpus_text(text):
 
 def main():
     parser = argparse.ArgumentParser(description="Train Causal Transformer and Export to ONNX")
-    parser.add_argument("--training_dir", type=str, default="Training/TinyStories", help="Corpus files directory")
+    parser.add_argument("--training_dir", type=str, default="Training/TinyStories_200k", help="Corpus files directory")
     parser.add_argument("--tokenizer_path", type=str, default="tokenizer.bin", help="Path to save/load tokenizer")
     parser.add_argument("--target_vocab_size", type=int, default=4096, help="BPE vocabulary size")
     parser.add_argument("--d_model", type=int, default=256, help="Model dimension")
