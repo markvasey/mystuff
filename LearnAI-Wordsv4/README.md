@@ -488,7 +488,7 @@ The following table documents the loss, perplexity, and qualitative improvements
 
 | Epoch | Train Loss | Val Loss | Perplexity ($e^{\text{Loss}}$) | Generated Sample Snippet | Learning Milestones & Observations |
 | :---: | :---: | :---: | :---: | :--- | :--- |
-| **1** | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* |
+| **1** | 3.2828 | 1.9258 | 6.86 | `[The €™ms the same. "What are you doing?" she asked. "I'm making..."]` | Time: 1494.4s (24.9 min). Masters paragraph breaks and conversational quotes immediately. Shows standard early-epoch repetition ("a house and a house...") and minor UTF-8 byte representation artifacts (`€™`). |
 
 
 
