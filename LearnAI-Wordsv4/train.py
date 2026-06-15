@@ -356,8 +356,8 @@ def main():
 
     # Compile the model for PyTorch 2.x optimized JIT execution (Kernel Fusion + Triton)
     if device.type == "cuda":
-        print("Compiling model graph using torch.compile()...")
-        compiled_model = torch.compile(model)
+        print("Compiling model graph using torch.compile(mode='reduce-overhead')...")
+        compiled_model = torch.compile(model, mode="reduce-overhead")
     else:
         compiled_model = model
 
@@ -410,7 +410,9 @@ def main():
         {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": 0.01},
         {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
     ]
-    optimizer = torch.optim.AdamW(optim_groups, lr=args.lr)
+    # Enable fused AdamW on CUDA to run parameter updates inside a single optimized kernel
+    use_fused = (device.type == "cuda")
+    optimizer = torch.optim.AdamW(optim_groups, lr=args.lr, fused=use_fused)
     
     checkpoint_path = "checkpoint.pt"
     start_epoch = 1
@@ -487,9 +489,7 @@ def main():
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             worse_epochs = 0
-            print("✓ New best validation loss. Saving checkpoint and exporting checkpoints to ONNX...")
-            # Export to ONNX
-            export_onnx(model, args.export_onnx, args.block_size, device)
+            print("✓ New best validation loss. Saving checkpoint...")
             # Save PyTorch checkpoint
             torch.save({
                 "epoch": epoch,
@@ -506,6 +506,15 @@ def main():
                 break
 
     print("Training finished!")
+    
+    # Export the final best model to ONNX at the very end of training
+    if os.path.exists(checkpoint_path):
+        print("Loading best checkpoint for final ONNX export...")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+    
+    print(f"Exporting final optimized model to {args.export_onnx}...")
+    export_onnx(model, args.export_onnx, args.block_size, device)
 
 def export_onnx(model, onnx_path, block_size, device):
     model.eval()
