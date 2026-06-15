@@ -67,3 +67,4 @@ __pycache__/
 # Exported models
 *.onnx
 *.onnx.data
+*.pt

@@ -162,6 +162,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=256, help="Sequence block size")
     parser.add_argument("--epochs", type=int, default=5, help="Number of epochs to train")
     parser.add_argument("--stride", type=int, default=1, help="Stride step size to slice the corpus")
+    parser.add_argument("--patience", type=int, default=3, help="Early stopping patience (number of validation-worse epochs before stopping)")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--lr", type=float, default=5e-4, help="Learning rate")
     parser.add_argument("--export_onnx", type=str, default="model.onnx", help="Export path for ONNX model")
@@ -191,17 +192,26 @@ def main():
         tokenizer.save(args.tokenizer_path)
         print(f"BPE Tokenizer trained and saved to {args.tokenizer_path}")
 
-    # 2. Tokenize corpus for training
-    print("Tokenizing corpus for training...")
-    txt_files = [os.path.join(args.training_dir, f) for f in os.listdir(args.training_dir) if f.endswith(".txt")]
-    corpus_parts = []
-    for path in txt_files:
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-            corpus_parts.append(clean_gutenberg(content))
-    full_corpus = "\n\n".join(corpus_parts)
-    
-    token_ids = tokenizer.encode(full_corpus)
+    # 2. Tokenize corpus for training (or load from cache if available)
+    tokens_cache = "tokens.bin"
+    if os.path.exists(tokens_cache):
+        print(f"Loading tokenized corpus from cache ({tokens_cache})...")
+        token_ids = np.fromfile(tokens_cache, dtype=np.int32).tolist()
+    else:
+        print("Tokenizing corpus for training...")
+        txt_files = [os.path.join(args.training_dir, f) for f in os.listdir(args.training_dir) if f.endswith(".txt")]
+        corpus_parts = []
+        for path in txt_files:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                corpus_parts.append(clean_gutenberg(content))
+        full_corpus = "\n\n".join(corpus_parts)
+        
+        token_ids = tokenizer.encode(full_corpus)
+        # Save to cache
+        np.array(token_ids, dtype=np.int32).tofile(tokens_cache)
+        print(f"Saved tokenized corpus to cache ({tokens_cache})")
+        
     print(f"Total tokens in corpus: {len(token_ids)}")
     print(f"Vocabulary size: {tokenizer.vocab_size}")
 
@@ -233,9 +243,23 @@ def main():
     # 5. Optimizer & loss
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     
-    # 6. Training loop
+    checkpoint_path = "checkpoint.pt"
+    start_epoch = 1
     best_val_loss = float("inf")
-    for epoch in range(1, args.epochs + 1):
+    worse_epochs = 0
+    
+    if os.path.exists(checkpoint_path):
+        print(f"Loading PyTorch checkpoint from {checkpoint_path}...")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        start_epoch = checkpoint["epoch"] + 1
+        best_val_loss = checkpoint["best_val_loss"]
+        worse_epochs = checkpoint.get("worse_epochs", 0)
+        print(f"Resuming training from Epoch {start_epoch} (Best Val Loss: {best_val_loss:.4f})")
+
+    # 6. Training loop
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         total_loss = 0
         start_time = time.time()
@@ -269,11 +293,32 @@ def main():
         
         print(f"--- Epoch {epoch} Summary | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Time: {time.time() - start_time:.1f}s ---")
         
+        # Generate and print a text sample to visualize training progress
+        sample_text = generate_sample(model, tokenizer, "The ", num_tokens=50, device=device)
+        print(f"Sample (Epoch {epoch}): [{sample_text}]")
+        model.train() # restore train mode
+
+        
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            print("✓ New best validation loss. Exporting checkpoints to ONNX...")
+            worse_epochs = 0
+            print("✓ New best validation loss. Saving checkpoint and exporting checkpoints to ONNX...")
             # Export to ONNX
             export_onnx(model, args.export_onnx, args.block_size, device)
+            # Save PyTorch checkpoint
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "best_val_loss": best_val_loss,
+                "worse_epochs": worse_epochs
+            }, checkpoint_path)
+        else:
+            worse_epochs += 1
+            print(f"⚠ Validation loss did not improve ({worse_epochs}/{args.patience} patience). Best: {best_val_loss:.4f}")
+            if worse_epochs >= args.patience:
+                print(f"Early stopping triggered at Epoch {epoch}. Training stopped.")
+                break
 
     print("Training finished!")
 
@@ -287,7 +332,7 @@ def export_onnx(model, onnx_path, block_size, device):
         dummy_input,
         onnx_path,
         export_params=True,
-        opset_version=14,
+        opset_version=18,
         do_constant_folding=True,
         input_names=["input_ids"],
         output_names=["logits"],
@@ -297,6 +342,29 @@ def export_onnx(model, onnx_path, block_size, device):
         }
     )
     print(f"Model successfully exported to {onnx_path}")
+
+def generate_sample(model, tokenizer, prompt, num_tokens=50, temperature=0.7, top_k=5, device="cpu"):
+    model.eval()
+    token_ids = tokenizer.encode(prompt)
+    input_tensor = torch.tensor([token_ids], dtype=torch.long, device=device)
+    
+    with torch.no_grad():
+        for _ in range(num_tokens):
+            cond_input = input_tensor[:, -model.block_size:]
+            logits = model(cond_input)
+            last_logits = logits[0, -1, :] / max(temperature, 1e-6)
+            
+            # Apply top-k filtering
+            v, _ = torch.topk(last_logits, min(top_k, last_logits.size(-1)))
+            last_logits[last_logits < v[-1]] = -float('inf')
+            
+            probs = F.softmax(last_logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            
+            input_tensor = torch.cat((input_tensor, next_token.unsqueeze(0)), dim=1)
+            
+    generated_ids = input_tensor[0].tolist()
+    return tokenizer.decode(generated_ids)
 
 if __name__ == "__main__":
     main()
