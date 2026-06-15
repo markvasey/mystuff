@@ -1,5 +1,5 @@
 #!/bin/bash
-venv/bin/python train.py \
+systemd-inhibit --why="Training TinyStories Model" venv/bin/python train.py \
   --training_dir Training/TinyStories_200k \
   --tokenizer_path tokenizer.bin \
   --target_vocab_size 8192 \

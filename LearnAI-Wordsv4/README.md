@@ -121,6 +121,15 @@ Instead of extracting training sequences with a sliding stride of `10` (which re
 *   **Eliminates Redundancy:** Reduces the total batch count per epoch by **51.2x** while still exposing the model to 100% of the text corpus twice per epoch.
 *   **Performance Impact:** Accelerates epoch times from ~3.6 hours down to **~76 seconds** (under bfloat16 + compile), reducing the total 40-epoch training time from 6 days to **under an hour** while improving model generalization.
 
+### 5. NVIDIA Driver Persistence Mode (`nvidia-smi -pm 1`)
+Under Linux, the NVIDIA driver by default operates in a dynamic loading state. It only loads when an active application requests CUDA access and immediately unloads when the task finishes.
+*   **The Issue**: During NLP training (especially with PyTorch JIT graph compilations and CUDA allocations), this dynamic unloading introduces driver initialization latency (delays of several seconds) and can occasionally lead to kernel crashes or memory channel leaks during heavy model compilation.
+*   **The Optimization**: We enable **Persistence Mode** (which keeps the NVIDIA driver permanently resident in memory, keeping VRAM channels open and the GPU active):
+    ```bash
+    sudo nvidia-smi -pm 1
+    ```
+*   **The Impact**: Eliminates launch latency, speeds up model startup, and ensures stable CUDA kernel allocation throughout the compilation and training loops.
+
 ---
 
 ## 🏗️ Project Structure & Component Mappings
@@ -160,6 +169,23 @@ Compile and verify the test suite (which validates BBPE tokenization and checks 
 ```bash
 ./mvnw test
 ```
+
+### 5. Managing System Sleep States (For Long Training Runs)
+To prevent your Linux system from entering sleep, suspend, or hibernation during long training loops (which would freeze the process and disconnect CUDA VRAM channels), the training execution in both **[train_model.sh](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv4/train_model.sh)** and **[retrain_model.sh](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv4/retrain_model.sh)** is pre-configured to run wrapped in **`systemd-inhibit`**:
+
+*   **Automated Lock**: When you execute either script, systemd automatically blocks sleep/suspend for the exact duration of the training run.
+*   **Automated Release**: As soon as training finishes, early-stops, or is interrupted (Ctrl+C), the sleep lock is immediately and safely released without requiring any user input or `sudo` passwords.
+
+#### 🛠️ Manual Alternative (System-Wide Mask)
+If your environment does not support session inhibitors, you can manually disable and re-enable suspend system-wide:
+*   **To disable suspend/sleep**:
+    ```bash
+    sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+    ```
+*   **To re-enable suspend/sleep**:
+    ```bash
+    sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
+    ```
 
 ---
 
