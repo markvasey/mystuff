@@ -109,7 +109,7 @@ A direct comparison of training the **Fictional Literature** dataset (2.69M toke
 | **Best Val Loss (Epoch 11)** | — | **`2.8899`** | Deep semantic compression |
 | **Best Val Loss (Epoch 14)** | — | **`2.7255`** | Advanced syntactic modeling |
 | **Best Val Loss (Epoch 35)** | — | **`2.2225`** | High coherence, complex clauses |
-| **Best Val Loss (Epoch 40)** | `4.3553` | **`2.1597`** | Beat v2's best score by Epoch 5 |
+| **Best Val Loss (Epoch 50)** | `4.3553` | **`2.0198`** | Beat v2's best score by Epoch 5 |
 
 ### 2. Dialogue & Character Learning Insights (by Epoch 5)
 
