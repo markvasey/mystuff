@@ -531,6 +531,19 @@ The following table documents the loss, perplexity, and qualitative improvements
 | **48** | 0.2138 | **0.7968** | **2.22** | `[The est day, the children learned something new about the truth. They learned...]` | Time: 1490.8s. **Best Validation Loss reached.** Highest semantic synthesis (abstract concepts like "dreams coming true" and "learning about the truth"). |
 | **50** | 0.1937 | 0.8090 | 2.25 | `[The Millie was scared, but she wanted to be brave. She walked up to the man...]` | Time: 1491.3s. (2/3 patience). Slight validation drift begins as parameters memorize specific dialogue strings. |
 | **51** | 0.1841 | 0.8081 | 2.24 | `[The Of course, you can keep it," he said, handing the mug back to Luke...]` | Time: 1490.7s. (3/3 patience). **Early stopping triggered.** The model shuts down and restores the optimal Epoch 48 checkpoint. |
+### 6. Run #3 Detailed Epoch Progression (200k Dataset - HF Trainer & Batch Size 32)
+The following table documents the progression of the newly optimized Hugging Face `v5` retraining run on the 200k stories dataset (stride 512, block size 1024, batch size 32, running on NVIDIA GeForce RTX 5060 Ti eGPU). 
+
+Each epoch has 2,412 steps and takes **~15 minutes** (compared to 25 minutes in the original bespoke Run #2):
+
+| Epoch | Train Loss | Val Loss | Perplexity ($e^{\text{Loss}}$) | Generated Sample Snippet | Learning Milestones & Observations |
+| :---: | :---: | :---: | :---: | :--- | :--- |
+| **1** | 2.1173 | 2.1045 | 8.20 | `[The The ball smiled. The little girl smiled, and the ball was so happy. The ball and the little girl became best friends in the park...]` | Time: 916s (~15 min). Warmup completes. High sentence structure alignment, no `<UNK>` tags, dialogue punctuation is fully established immediately. |
+| **2** | 1.6043 | 1.6175 | 5.04 | `[The John got a bit scared, but he stood there too. Suddenly, the sky turned dark and the sky became dark. John was scared. "Who's there?" Timmy shouted...]` | Time: ~15 min. Perplexity drops to 5.04. Strong narrative context and conversational flow, with minor phrase repetition. |
+| **3** | 1.4397 | 1.4636 | 4.32 | `[The The end.--- Story 24718 --- Once upon a time, there was a mommy and a baby. The baby was very impatient and wanted to go outside and play. Mommy said no. The baby didn't understand...]` | Time: ~15 min. Perplexity drops to 4.32. The model learns complex vocabulary ("impatient") and structures story headers and transitions correctly. |
+| **4** | 1.3554* | *Pending* | *Pending* | *In Progress (Batch 1064/2412)* | *Running... Cosine learning rate decay starts (LR: 2.99e-04).* |
+
+*\*Note: Indicates the latest recorded loss in the active epoch before log dump.*
 
 ---
 
@@ -581,6 +594,49 @@ The **Run #2 (200k Stories)** training loop completed successfully on **June 16,
 *   **Early Stopping:** The trainer monitored the validation loss, identifying **Epoch 48** as the peak generalization point (`Val Loss: 0.7968`, `Train Loss: 0.2138`). After 3 epochs of no validation improvement, early stopping halted training at Epoch 51.
 *   **ONNX Export:** The trainer automatically loaded the optimal weights from Epoch 48 and successfully exported the final graph to `model.onnx` with dynamic axes.
 *   **Result:** The resulting model is a highly generalized, robust, and creative text generator ready for Java CLI execution.
+
+---
+
+### 4. Hardware Scaling & Feasibility Discussion
+
+To plan the next phases of development for the `LearnAI-Words` model family, the following Q&A outlines the physical constraints, throughput speed, and model quality trade-offs when scaling up on local consumer-grade GPU hardware.
+
+#### Q1: What is the realistic maximum model size using a single RTX 5060 Ti (16GB VRAM) eGPU?
+There are two ways to define the maximum model size: the **theoretical VRAM limit** and the **practical trainable limit**.
+
+*   **Theoretical VRAM Limit: ~1.2 Billion Parameters**
+    Using extreme memory optimization techniques, a 1.2B model can fit in 16GB VRAM:
+    *   *Architecture:* `d_model = 1600`, `n_layer = 32`, `n_head = 20`, `n_kv_head = 5`, `block_size = 1024`.
+    *   *Required Settings:* Gradient Checkpointing enabled, 8-bit AdamW (`bitsandbytes`), and a micro-batch size of 4 with 8 gradient accumulation steps.
+    *   *Footprint:* ~14.5 GB of VRAM.
+*   **Practical Trainable Limit (Recommended): ~350M - 370M Parameters**
+    For day-to-day training, this is the optimal sweet spot:
+    *   *Architecture:* `d_model = 1024`, `n_layer = 24`, `n_head = 16`, `n_kv_head = 4`, `block_size = 1024`.
+    *   *Required Settings:* Gradient Checkpointing enabled, micro-batch size of 16 with 2 gradient accumulation steps.
+    *   *Footprint:* ~8.5 GB of VRAM.
+    *   *Feasibility:* Training takes ~1.8 hours per epoch. A 30-epoch run converges in 2.5 days. A 1.2B model would take 9.3 days of continuous GPU runtime to complete the same steps.
+*   **eGPU Bandwidth Warning:** Because the eGPU is connected via Thunderbolt (limited to PCIe Gen 3 x4, ~3.5 GB/s), you **cannot** use CPU offloading (e.g., DeepSpeed ZeRO-3 Offload) to bypass VRAM limits. Transferring weights between system RAM and VRAM across a Thunderbolt connection at every step degrades execution speed by 10x-20x. The entire model must remain resident in VRAM.
+
+#### Q2: Do aggressive memory optimizations impact model quality?
+No, the loss in quality is either absolute zero or mathematically negligible:
+
+*   **Gradient Checkpointing (0% Impact):** This is a pure computation-vs-memory trade-off. Instead of keeping intermediate activation tensors in VRAM, PyTorch discards them and recalculates them on the fly during the backward pass. The resulting gradients and weight updates are mathematically identical.
+*   **8-Bit AdamW (Negligible Impact, $<0.05\%$):** Quantizes only the optimizer's historical states (first/second moments of gradients) to 8-bit. Model weights, gradients, and master weights remain in high precision (`bfloat16`/`float32`). Pre-training studies show no observable divergence or degradation in downstream performance.
+*   **Gradient Accumulation (0% Impact):** Running 8 micro-batches of size 4 and averaging their accumulated gradients is mathematically identical to running a single batch of 32. Because the model uses sequence-independent RMSNorm instead of Batch Normalization, batch splitting has zero statistical effect on normalization layers.
+
+#### Q3: Do memory optimizations improve training speed (seq/sec)?
+**No. These are strictly memory-saving techniques and will slow down training throughput:**
+*   **Gradient Checkpointing:** Slows training down by **25% to 30%** due to the CPU/GPU re-evaluating the forward pass for each block during backward propagation.
+*   **Gradient Accumulation:** Slightly slows training down because smaller micro-batches (e.g., 4 or 8) fail to saturate the GPU's streaming multiprocessors (SMs), resulting in lower GPU occupancy, and introduce small kernel launch overheads.
+*   **8-Bit AdamW:** Neutral. The VRAM bandwidth savings of loading smaller historical states are offset by the compute cost of quantizing and dequantizing states.
+*   *How to maximize speed:* Disable gradient checkpointing/accumulation, maximize batch size up to the VRAM limit, keep `torch.compile` and `bfloat16` enabled.
+
+#### Q4: Will scaling to a 500M parameter model improve performance on the TinyStories 200k dataset?
+**No. On this specific dataset, a 500M model is highly counterproductive:**
+*   **Severe Overfitting:** The 200k dataset contains ~40M unique tokens. A 500M parameter model has a 12.5:1 parameter-to-token ratio, meaning it has enough capacity to memorize the training texts word-for-word rather than learning general grammar. It would overfit within 5–10 epochs.
+*   **Domain Limits:** TinyStories utilizes a highly restricted vocabulary. A 50M parameter model is already large enough to master 100% of the syntax and grammatical structures of this simple domain. 
+*   **Inference & Export Penalties:** The final ONNX model would grow to ~1.0 GB and run 10x slower on CPU in the Java client, while requiring huge system memory spikes during compilation.
+*   *Alternative Recommendation:* If you want to leverage extra hardware capacity to get a better model, **scale the dataset** to the full 2.1-million TinyStories corpus (~400M tokens), increase the context length (`--block_size 2048`), or increase vocabulary complexity (`--target_vocab_size 16384`).
 
 
 
