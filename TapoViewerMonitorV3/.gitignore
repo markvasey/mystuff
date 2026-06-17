@@ -1,0 +1,35 @@
+secret.txt
+target/
+cameras.xml
+*.mp4
+*.MP4
+
+# ── Python training environment ──────────────────────────────────────────────
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── ML training artefacts ────────────────────────────────────────────────────
+# Checkpoint directories written by HuggingFace Trainer during training
+transformer_checkpoints/
+
+# Root-level scratch ONNX files (exported during training / re-export scripts).
+# The canonical models live in src/main/resources/ and ARE tracked.
+/*.onnx
+/*.onnx.data
+*.onnx.tmp.onnx
+*.onnx.tmp.onnx.data
+
+# ── Private / local-only files ───────────────────────────────────────────────
+# Design scratch notes — not for version control
+thoughts.txt
+
+# Training video datasets — large binary files, not for version control
+TestVideos/
+
+# ── IDE / OS ─────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.DS_Store

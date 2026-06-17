@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+	<title></title>
+	<meta name="generator" content="LibreOffice 7.3.7.2 (Linux)"/>
+	<meta name="created" content="00:00:00"/>
+	<meta name="changed" content="00:00:00"/>
+	<style type="text/css">
+		@page { size: 21.59cm 27.94cm; margin: 2.54cm }
+		p { line-height: 115%; text-align: left; orphans: 0; widows: 0; margin-bottom: 0.25cm; direction: ltr; background: transparent }
+		h1 { font-size: 24pt; font-style: normal; font-weight: bold; line-height: 100%; text-align: left; orphans: 0; widows: 0; margin-bottom: 0.42cm; border: none; padding: 0cm; direction: ltr; background: transparent }
+		h2 { font-size: 18pt; font-style: normal; font-weight: bold; line-height: 100%; text-align: left; orphans: 0; widows: 0; margin-top: 0.4cm; margin-bottom: 0.4cm; border: none; padding: 0cm; direction: ltr; background: transparent }
+		h3 { font-size: 14pt; font-style: normal; font-weight: bold; line-height: 100%; text-align: left; orphans: 0; widows: 0; margin-bottom: 0.42cm; border: none; padding: 0cm; direction: ltr; background: transparent }
+	</style>
+</head>
+<body lang="en-GB" link="#000080" vlink="#800000" dir="ltr"><h1 style="line-height: 125%; margin-bottom: 0.53cm; border: none; padding: 0cm; background: transparent">
+<font color="#1a365d">Technical Architecture &amp; Design Document:
+Multi-Modal Spatio-Temporal Transformer for Tonic-Clonic Seizure
+Detection</font></h1>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">This document codifies the technical discussion
+and architectural blueprint for extending an existing computer vision
+pipeline to support deep-learning-based classification of generalized
+tonic-clonic seizures. By synthesizing the real-time processing
+capabilities of the Java-based video framework with the optimized
+deep learning training infrastructure of the language-modeling
+system, a non-causal Transformer encoder pipeline is established.</font></p>
+<p style="line-height: 100%; margin-bottom: 0.53cm; border: none; padding: 0cm; background: transparent">
+<br/>
+<br/>
+
+</p>
+<h2 style="line-height: 125%; margin-top: 0.53cm; margin-bottom: 0.26cm; border: none; padding: 0cm; background: transparent">
+<font color="#2b6cb0">1. Engineering Feasibility &amp; Architectural
+Paradigm</font></h2>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">Transitioning from traditional rule-based
+threshold filters or image-heavy pixel models to a skeleton-based
+motion transformer is a highly credible architectural path.
+Restricting model inputs strictly to abstract spatial coordinates and
+continuous vector representations provides deep architectural
+advantages over raw pixel processing:</font></p>
+<ul>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Environmental and Lighting Invariance:</b></font><font color="#000000">
+	By extracting raw joint positions, the pipeline strips out
+	background noise, furniture features, bedding color, and varying
+	illumination profiles across different environments.</font></p>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Strict Privacy Guarantees:</b></font><font color="#000000">
+	In a sensitive medical telemetry context, storing and transmitting
+	thin coordinate arrays completely mitigates the data security risks
+	associated with storing or transferring raw RGB pixel streams of a
+	patient in bed.</font></p>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Computational Efficiency:</b></font><font color="#000000">
+	Processing low-dimensional continuous vector matrices significantly
+	scales down VRAM requirements and training parameters compared to
+	heavy, resource-intensive 3D Convolutional Neural Networks
+	(3D-CNNs).</font></p>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0.53cm; border: none; padding: 0cm; background: transparent">
+<br/>
+<br/>
+
+</p>
+<h2 style="line-height: 125%; margin-top: 0.53cm; margin-bottom: 0.26cm; border: none; padding: 0cm; background: transparent">
+<font color="#2b6cb0">2. Clinical Semiology &amp; Feature Vector
+Mapping</font></h2>
+<p style="line-height: 125%; margin-bottom: 0.4cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">Generalized tonic-clonic events carry
+unambiguous spatial and temporal signatures. To maximize detection
+reliability and minimize false alarms caused by everyday rhythmic
+movements (like walking or sitting), the input feature vector is
+structured as a 39-dimensional continuous token combining skeletal
+tracking with high-fidelity facial metrics:</font></p>
+<table width="624" cellpadding="10" cellspacing="0">
+	<col width="187"/>
+
+	<col width="188"/>
+
+	<col width="187"/>
+
+	<thead>
+		<tr valign="top">
+			<td width="187" bgcolor="#f0f4f8" style="background: #f0f4f8; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#1a365d"><b><span style="background: transparent">Feature
+				Subsystem</span></b></font></p>
+			</td>
+			<td width="188" bgcolor="#f0f4f8" style="background: #f0f4f8; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#1a365d"><b><span style="background: transparent">Dimensionality</span></b></font></p>
+			</td>
+			<td width="187" bgcolor="#f0f4f8" style="background: #f0f4f8; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; margin-bottom: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#1a365d"><b><span style="background: transparent">Target
+				Clinical Semiology</span></b></font></p>
+				<p align="left" style="page-break-inside: auto; orphans: 0; widows: 0; border: none; padding: 0cm; background: transparent; page-break-after: auto">
+				 
+				</p>
+			</td>
+		</tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+	</thead>
+	<tbody>
+		<tr valign="top">
+			<td width="187" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">Skeletal Joints (YOLOv8-Pose)</font></p>
+			</td>
+			<td width="188" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">34 dimensions (17 joints × 2 coordinates)</font></p>
+			</td>
+			<td width="187" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">Tracks bilateral extremities, rhythmic
+				clonic shaking pacing (2.0 to 4.5 Hz), and tonic rigid layout
+				shifts.</font></p>
+			</td>
+		</tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr valign="top">
+			<td width="187" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">Head
+				Rotation (PnP Solver via FaceMesh)</span></font></p>
+			</td>
+			<td width="188" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">3
+				dimensions (Yaw, Pitch, Roll angles)</span></font></p>
+			</td>
+			<td width="187" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">Isolates
+				sudden, sustained forced lateral head deviation (versive
+				movements) specific to tonic presentation.</span></font></p>
+			</td>
+		</tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr valign="top">
+			<td width="187" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">Eye Aspect Ratio (EAR)</font></p>
+			</td>
+			<td width="188" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">2 dimensions (Left and Right ratios)</font></p>
+			</td>
+			<td width="187" style="background: transparent; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000">Calculates the ratio of vertical eyelid
+				distance to horizontal length to track tonic wide-open eye
+				locking.</font></p>
+			</td>
+		</tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr></tr>
+		<tr valign="top">
+			<td width="187" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">Jaw
+				Aspect Ratio (JAR)</span></font></p>
+			</td>
+			<td width="188" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">1
+				dimension (Vertical / horizontal mouth boundaries)</span></font></p>
+			</td>
+			<td width="187" bgcolor="#f8fafc" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.26cm"><p style="orphans: 0; widows: 0; margin-top: 0.26cm; border: none; padding: 0cm; background: transparent">
+				<font color="#000000"><span style="background: transparent">Identifies
+				masseter contraction anomalies, distinguishing sudden jaw
+				clenches or open-mouth spasms.</span></font></p>
+			</td>
+		</tr>
+	</tbody>
+</table>
+<p style="line-height: 100%; margin-top: 0.4cm; margin-bottom: 0.53cm; border: none; padding: 0cm; background: transparent">
+<br/>
+<br/>
+
+</p>
+<h2 style="line-height: 125%; margin-top: 0.53cm; margin-bottom: 0.26cm; border: none; padding: 0cm; background: transparent">
+<font color="#2b6cb0">3. Data Invariance via Resolution Normalization</font></h2>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">Because training and validation data span
+multiple resolutions (e.g., 1080p, 720p) and varying aspect ratios, a
+uniform scale normalization step is required. This mathematical
+scaling prevents absolute pixel coordinate drift while completely
+preserving the structural geometry of the subject's posture:</font></p>
+<p style="line-height: 125%; margin-left: 0.26cm; margin-right: 0.26cm; margin-top: 0.26cm; margin-bottom: 0.26cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000"><font face="Arial, serif"><span style="background: #f1f5f9">MaxDim
+= max(Width, Height)<br/>
+X_normalized = X_raw / MaxDim<br/>
+Y_normalized
+= Y_raw / MaxDim<br/>
+</span></font></font><br/>
+<br/>
+
+</p>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">Dividing both axes by the maximum dimension
+ensures all output points map uniformly to a 0.0 to 1.0 scale. This
+technique guarantees resolution-independence while keeping vertical
+indicators intact (allowing the model to explicitly separate
+standing/walking posture geometry from recumbent seizure
+configurations).</font></p>
+<p style="line-height: 100%; margin-bottom: 0.53cm; border: none; padding: 0cm; background: transparent">
+<br/>
+<br/>
+
+</p>
+<h2 style="line-height: 125%; margin-top: 0.53cm; border: none; padding: 0cm; background: transparent">
+<font color="#2b6cb0">4. Four-Phase Production Architecture Blueprint</font></h2>
+<h3 style="line-height: 125%; margin-top: 0cm; margin-bottom: 0.13cm; border: none; padding: 0cm; background: transparent">
+<font color="#4a5568">Phase 1: Headless Batch Extraction (Java
+Client)</font></h3>
+<p style="line-height: 125%; margin-bottom: 0.4cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">Extend the core Java system to scan the
+file-system dataset layout recursively (Training and Validation
+folder pairs). The batch processor bypasses UI components and uses
+Foreign Function &amp; Memory (FFM) Panama API structures to read
+files directly into off-heap memory. Frames execute sequentially
+through YOLOv8-Pose and the MediaPipe FaceMesh ONNX runtime.
+Coordinates are processed through uniform scale normalization and
+compiled into a single historical continuous matrix with a shape of
+[TotalFrames, 39], dumped directly as structured JSON payloads next
+to source files.</font></p>
+<h3 style="line-height: 125%; margin-top: 0cm; margin-bottom: 0.13cm; border: none; padding: 0cm; background: transparent">
+<font color="#4a5568">Phase 2: Sliding-Window Dataset Staging (Python
+DataLoader)</font></h3>
+<p style="line-height: 125%; margin-bottom: 0.4cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">A custom PyTorch Dataset class maps the long
+extracted JSON coordinate matrices into discrete temporal evaluation
+slices. For a human-like response time of 3 to 5 seconds, setting a
+frame-skipping configuration to 10 FPS translates directly to a
+highly stable context window length of T = 30 to 50 frames. Training
+segments use a short sliding stride and are fully shuffled to
+optimize gradient variations, while validation blocks remain
+sequence-pure to track exact generalization convergence curves.</font></p>
+<h3 style="line-height: 125%; margin-top: 0cm; margin-bottom: 0.13cm; border: none; padding: 0cm; background: transparent">
+<font color="#4a5568">Phase 3: Non-Causal Spatio-Temporal Transformer
+Encoder</font></h3>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">The continuous multi-modal feature matrix is
+mapped into a lower hidden dimension (e.g., 64 or 128) via a linear
+projection layer to minimize overfitting on the 1-hour video
+footprint. The layout features 2 to 3 dense Transformer encoder
+layers configured with:</font></p>
+<ul>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Global Non-Causal Masking:</b></font><font color="#000000">
+	Enables attention heads to cross-examine relationships both backward
+	and forward across the entire 3–5 second timeline simultaneously,
+	isolating the biphase transition from the initial rigid tonic freeze
+	to clonic contractions.</font></p>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Absolute Positional Embeddings:</b></font><font color="#000000">
+	Hardcodes chronological time progress into the continuous vector
+	space, tracking explicit postural evolution over the sliding window.</font></p>
+	<li><p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+	<font color="#000000"><b>Coordinate Augmentation Layer:</b></font><font color="#000000">
+	Introduces horizontal spatial mirroring, scale/translation
+	jittering, and random joint tracking dropouts directly inside the
+	training loop to artificially amplify dataset variety.</font></p>
+</ul>
+<h3 style="line-height: 125%; margin-top: 0.4cm; margin-bottom: 0.13cm; border: none; padding: 0cm; background: transparent">
+<font color="#4a5568">Phase 4: Optimization, Training &amp; Java
+Native Runtime Deployment</font></h3>
+<p style="line-height: 125%; margin-bottom: 0cm; border: none; padding: 0cm; background: transparent">
+<font color="#000000">The Python script optimizes training
+infrastructure using Graph Compilation (torch.compile) and Automatic
+Mixed Precision (AMP) with bfloat16 to maximize local eGPU compute
+performance. Upon model convergence against validation cross-entropy
+metrics, the model is exported to an optimized .onnx graph. The
+compiled graph is loaded directly back into the Java runtime
+environment via the existing ONNX Runtime pipeline. This deep
+learning classifier evaluates multi-modal vector sequences in
+real-time alongside low-level FFM pixel-difference fallback
+frameworks to trigger stable, verified caregiver notifications.</font></p>
+</body>
+</html>

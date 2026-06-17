@@ -1,9 +1,9 @@
-# LearnAI-Wordsv5: Hybrid PyTorch Training + ONNX Runtime Java Inference
+# LearnAI-Wordsv5: Hybrid Hugging Face/PyTorch Training + ONNX Runtime Java Inference
 
-`LearnAI-Wordsv5` represents the evolution of the `LearnAI-Words` project series, migrating from hand-crafted CPU and GPU/CUDA matrix algorithms to industry-standard deep learning libraries, and now implementing modern NLP preprocessing and architecture standards.
+`LearnAI-Wordsv5` represents the evolution of the `LearnAI-Words` project series, migrating from hand-crafted CPU and GPU/CUDA matrix algorithms to industry-standard deep learning libraries, and now implementing modern NLP preprocessing, Hugging Face ecosystem components, and architecture standards.
 
 This project implements the **Hybrid Approach**:
-1. **Training (Python + PyTorch)**: Build, train, and validate a standard Causal Transformer model (multi-head attention, MLP block with SwiGLU activations, RoPE position encodings, GQA, and RMSNorm) in PyTorch. The trained model is then exported directly to the standardized **ONNX (Open Neural Network Exchange)** format.
+1. **Training (Python + Hugging Face & PyTorch)**: Build, train, and validate an industry-standard LLaMA model (`LlamaForCausalLM`) configured via `LlamaConfig` and trained using the Hugging Face `Trainer` API (supporting automatic mixed-precision, JIT compilation, cosine learning rate scheduling, validation epochs, and early stopping). The trained model is then exported directly to the standardized **ONNX (Open Neural Network Exchange)** format.
 2. **Inference (Java + ONNX Runtime)**: Run the exported `.onnx` model using **ONNX Runtime Java** (`com.microsoft.onnxruntime`), completely eliminating manual off-heap VRAM cleaners, custom FFM/JNI bindings, and C++/CUDA compiler setups.
 
 ---
@@ -12,22 +12,19 @@ This project implements the **Hybrid Approach**:
 
 *   **Removal of Hand-Crafted C++/CUDA**: The `src/main/native` C++ code, JNI/FFM bindings (`CudaBridge.java`), and custom allocations (`GpuMatrix.java`) are replaced entirely by Microsoft's ONNX Runtime.
 *   **Native Hardware Delegation (cuBLAS & CUDA)**: Under the hood, the ONNX Runtime does not duplicate graphics or math libraries. Instead, it utilizes an **Execution Provider (EP)** architecture. On systems with an NVIDIA GPU, it automatically binds directly to NVIDIA's native proprietary libraries (such as **cuBLAS** for high-speed matrix multiplications and **cuDNN** for neural network modules) compiled directly in optimized C++ binaries. Java merely acts as an orchestrator, passing memory pointers via thin JNI wrappers so that the entire computation runs at raw hardware speeds without JVM memory or execution overhead.
-*   **Standardized Transformer Architecture**: The model is trained using standard PyTorch modules, allowing multi-head self-attention and non-linear MLP blocks (SwiGLU) that were extremely complex to hand-code in CUDA.
+*   **Standardized LLaMA Architecture (Hugging Face)**: Instead of custom/bespoke PyTorch modules, the model is initialized via Hugging Face's `LlamaConfig` and trained using `LlamaForCausalLM`. This brings native, standard-compliant implementations of Rotary Position Embeddings (RoPE), Grouped-Query Attention (GQA), Root Mean Square Normalization (RMSNorm), and SwiGLU activations, eliminating custom math bugs and ensuring high compatibility.
+*   **Unified Training Pipeline**: Completely replaced the manual PyTorch training loops, optimizers, learning rate schedulers, and validation checkpointing code with the Hugging Face `Trainer` API. Epoch training, batching, evaluation, and early stopping are managed natively.
 *   **Dynamic Sequence Length**: The exported ONNX model uses dynamic axes, allowing the Java CLI to run inference on prompts of any sequence length (up to the trained `block_size`).
 *   **Rust-Backed Tokenizer (Hugging Face)**: BPE Tokenizer training and encoding in Python is accelerated by the Rust-backed `tokenizers` library (with parallel `encode_batch`). It remains 100% binary compatible with the custom Java [BPETokenizer.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/src/main/java/com/learnai/words/tokenizer/BPETokenizer.java) via the shared `tokenizer.bin` layout, keeping Java 100% dependency-free with **0% unknown tokens (`<UNK>`)**.
 
 ---
 
-## 🆕 LearnAI-Wordsv5 Enhancements: BBPE, Text Cleansing, SwiGLU, GQA, & RoPE
+## 🆕 LearnAI-Wordsv5 Enhancements: Hugging Face Trainer, BBPE, Text Cleansing, SwiGLU, GQA, & RoPE
 
-In `LearnAI-Wordsv5`, we address several major bottlenecks observed during the training and validation of `v3`: **Gutenberg metadata pollution** in prompts, **tokenization character corruption (`<UNK>`)** in outputs, and constraints on model scaling and attention memory.
+In `LearnAI-Wordsv5`, we address several major bottlenecks observed during the training and validation of the previous iterations (like `v3` and `v4`) by migrating to the Hugging Face ecosystem, refining the dataset preprocessing, and improving overall training stability.
 
 ### 1. Robust Text Preprocessing & Cleansing
-To stop the model from learning Gutenberg index lines and page numbers (which caused output regressions like generating numbers or transcriber labels), we implemented a rigorous regex-based preprocessing pipeline inside `train.py`:
-*   **Page Number Filtering:** Strips all standalone integers and `[Page X]` or `Page X` markings.
-*   **Chapter & Act Headers:** Removes all lines containing Roman numerals or ordinal labels (e.g. `CHAPTER XXIV`, `ACT I`, `SCENE II`).
-*   **Metadata & Transcriber Notes:** Filters out lines containing standard ebook labels (e.g., `Transcriber's Note:`, `Produced by...`).
-*   **Standard Narrative Preservation:** Safely preserves instances where digits or chapter words appear inside actual narrative sentences (e.g. *"She was twelve years old."*).
+In previous iterations, to stop the model from learning Gutenberg index lines and page numbers (which caused output regressions like generating numbers or transcriber labels), we implemented a rigorous regex-based preprocessing pipeline (filtering page numbers, chapter headers, metadata, and transcriber notes). In `v5`, since we train on the clean `TinyStories` dataset, this custom regex cleansing was removed from `train.py` to eliminate a major CPU string-processing bottleneck.
 
 ### 2. Byte-Level Byte Pair Encoding (BBPE) Tokenizer
 In `v3`, the character-based BPE mapping turned non-ASCII characters (like Gutenberg's curly quotes `“`/`”` and curly apostrophes `’`) into `<UNK>`. This polluted the generated dialogue with unreadable tags. 
@@ -40,25 +37,24 @@ We rewrote both the Python (`tokenizer.py`) and Java (`BPETokenizer.java`) engin
 *   **Safe Decoding Stream:** When converting IDs back to text, the decoder concatenates the raw bytes first and decodes the final byte array to a UTF-8 string at the very end. This ensures multi-byte UTF-8 boundaries are resolved correctly without character corruption.
 
 ### 3. SwiGLU Gated Activation Function
-In `v4`, we replaced the standard MLP activation (`GELU`) with **SwiGLU** (Swish Gated Linear Unit), which has become the standard in modern LLMs like LLaMA, PaLM, and Gemini. 
+In `v5`, the model uses the **SwiGLU** (Swish Gated Linear Unit) activation function natively supported in Hugging Face's `LlamaForCausalLM` implementation, which has become the standard in modern LLMs like LLaMA, PaLM, and Gemini. 
 *   Instead of a simple projection and static threshold, the feed-forward layer projects input tokens into parallel gate and value streams, applies the Swish activation function, multiplies them element-wise, and projects the result back down.
 *   This dynamic gating capability allows the model to learn complex logic gates and contextual associations with much smoother gradients, yielding faster convergence during training.
 
 ### 4. Rotary Position Embeddings (RoPE)
-Instead of adding absolute position vectors (`wpe`) to the token vectors at the input layer, **RoPE** rotates the Query ($Q$) and Key ($K$) vectors in the complex plane during the attention calculation.
+Instead of adding absolute position vectors (`wpe`) to the token vectors at the input layer, **RoPE** rotates the Query ($Q$) and Key ($K$) vectors in the complex plane during the attention calculation. This is handled natively within `LlamaForCausalLM` via configuration parameters in `LlamaConfig`.
 *   **Absolute Position Embeddings (Old Way):** Maps coordinates to absolute slots (`0` to `255`). This imposes a hard limit on sequence lengths—the model cannot process tokens past its trained limit without crashing or outputting gibberish.
 *   **RoPE (Modern Standard):** Natively tracks the **relative distance** between words rather than their absolute positions. The rotation angle math extracts how far apart words are. This allows the model to extrapolate and generate text past its training limit (e.g., executing 2048+ tokens on a model trained for 1024) with minimal loss in quality.
 
 ### 5. Grouped-Query Attention (GQA)
-Instead of having an equal number of Query ($Q$), Key ($K$), and Value ($V$) heads, GQA groups multiple Query heads to share single Key and Value heads.
+Instead of having an equal number of Query ($Q$), Key ($K$), and Value ($V$) heads, GQA groups multiple Query heads to share single Key and Value heads. This is natively configured by specifying `num_attention_heads` and `num_key_value_heads` in `LlamaConfig` and executed within `LlamaForCausalLM`.
 *   **Multi-Head Attention (MHA - Old Way):** Every Query head has its own Key and Value heads (e.g., 8 Q, 8 K, 8 V). This forces the model to store a massive **KV Cache** in VRAM during text generation to avoid recalculations, slowing down generation speed on longer contexts.
 *   **Grouped-Query Attention (GQA - Modern Standard):** Query heads are grouped. For example, 8 Query heads are split into 2 groups of 4, with each group sharing a single Key/Value head (8 Q, 2 K, 2 V). This cuts the KV Cache size by **4x**, dramatically reducing the VRAM footprint and speeding up Java ONNX text generation, without losing the modeling capacity of MHA.
 
 ---
 
 ## 🛠️ Optimization Tweaks & Training Best Practices
-
-In addition to structural layout improvements, `v4` implements three key training optimizations:
+In addition to structural layout improvements, `v5` implements several key training optimizations leveraging the Hugging Face ecosystem:
 
 ### 1. RMSNorm (Root Mean Square Normalization)
 RMSNorm replaces standard `LayerNorm`. It scales activations purely by their root mean square instead of calculating both the mean and variance:
@@ -66,7 +62,7 @@ $$\text{RMSNorm}(x) = \frac{x}{\sqrt{\text{Mean}(x^2) + \epsilon}} \times \gamma
 Because it drops the mean subtraction step and learnable bias offsets ($\beta$), it reduces computational overhead by ~10% with zero loss in training accuracy.
 
 ### 2. Cosine Learning Rate Decay with Warmup
-Rather than keeping the learning rate constant, training follows a dynamic schedule composed of a linear warmup followed by a cosine decay:
+Rather than keeping the learning rate constant, training follows a dynamic schedule composed of a linear warmup followed by a cosine decay managed natively by the Hugging Face Trainer:
 
 ```text
 Learning Rate
@@ -92,21 +88,19 @@ Think of the optimization process as finding the lowest point of a steep canyon 
 *   **The Decaying Step**: By continuously shrinking the learning rate (e.g. down to `2.09e-04` in the middle of training, and eventually to `3.00e-05`), the optimizer takes smaller, more precise steps to settle exactly at the absolute lowest point of the loss valley.
 
 ### 3. Weight Decay Exclusion
-To prevent over-regularization of word coordinates and normalization gains:
-*   L2 weight decay is applied only to multi-dimensional projection weights (e.g., `nn.Linear` weight matrices).
-*   Weight decay is explicitly **excluded** for 1D gains/weights (`RMSNorm.weight`), biases, and vocabulary token embeddings (`wte.weight`).
+To prevent over-regularization of word coordinates and normalization gains, weight decay is explicitly **excluded** for 1D gains/weights (`RMSNorm.weight`), biases, and vocabulary token embeddings, and is only applied to multi-dimensional projection weights (e.g., `nn.Linear` weight matrices).
 
 ---
 
 ## ⚡ PyTorch 2.x & GPU Hardware Optimizations
 
-To train the 49.8M parameter `v4-Large` model efficiently on consumer GPU hardware (like the **NVIDIA GeForce RTX 5060 Ti**), `v4` integrates several advanced compute and memory optimizations:
+To train the 49.8M parameter `v5-Large` model efficiently on consumer GPU hardware (like the **NVIDIA GeForce RTX 5060 Ti**), `v5` integrates several advanced compute and memory optimizations:
 
 ### 1. Automatic Mixed Precision (AMP) with `bfloat16`
-Using `torch.amp.autocast`, the training script automatically performs the forward/backward activation math in 16-bit half-precision (`bfloat16` uses 2 bytes instead of 4).
+The Hugging Face Trainer manages mixed-precision training automatically when `bf16=True` is enabled in `TrainingArguments`. This performs the forward/backward activation math in 16-bit half-precision (`bfloat16` uses 2 bytes instead of 4):
 *   **Memory Savings:** Halves the activation memory footprint, lowering peak VRAM requirements from over 15 GiB to **~7.8 GiB** at batch size 16.
 *   **Hardware Acceleration:** Accesses dedicated **Tensor Cores** on NVIDIA GPUs, yielding a **1.5x speedup** in raw compute.
-*   **ONNX Stability:** Autocast only scales activations dynamically. The model weights themselves remain in `float32`, ensuring the exported ONNX model is fully compatible with standard `float32` Java runtime environments.
+*   **ONNX Stability:** Mixed-precision only scales activations dynamically. The model weights themselves remain in `float32`, ensuring the exported ONNX model is fully compatible with standard `float32` Java runtime environments.
 
 ### 2. JIT Graph Compilation (`torch.compile`)
 PyTorch 2.x JIT model compilation is enabled via `torch.compile(model)`. It intercepts the PyTorch model graph and compiles it into optimized CUDA kernels (using the OpenAI Triton compiler) before training:
@@ -119,9 +113,9 @@ The Hugging Face `Trainer` dataloader is optimized with `dataloader_pin_memory=T
 *   **Python 3.14 Safety:** Setting background workers to 0 prevents multiprocessing worker deadlocks during cleanup on exit in Python 3.14, with negligible throughput loss.
 
 ### 4. Dataset Stride Optimization (Stride 512)
-Instead of extracting training sequences with a sliding stride of `10` (which resulted in 99.0% identical overlapping sequences), `v4` uses a stride of **`512`** (50% overlap of the 1,024 context window):
+Instead of extracting training sequences with a sliding stride of `10` (which resulted in 99.0% identical overlapping sequences), `v5` uses a stride of **`512`** (50% overlap of the 1,024 context window):
 *   **Eliminates Redundancy:** Reduces the total batch count per epoch by **51.2x** while still exposing the model to 100% of the text corpus twice per epoch.
-*   **Performance Impact:** Accelerates epoch times from ~3.6 hours down to **~76 seconds** (under bfloat16 + compile), reducing the total 40-epoch training time from 6 days to **under an hour** while improving model generalization.
+*   **Performance Impact:** Accelerates epoch times from ~3.6 hours down to **~15 minutes** (under batch size 32, bfloat16, and compiled mode), reducing the total training time while improving model generalization.
 
 ### 5. NVIDIA Driver Persistence Mode (`nvidia-smi -pm 1`)
 Under Linux, the NVIDIA driver by default operates in a dynamic loading state. It only loads when an active application requests CUDA access and immediately unloads when the task finishes.
@@ -164,7 +158,7 @@ While `v4` introduced basic GPU-accelerated training, `v5` implements four criti
 ## 🏗️ Project Structure & Component Mappings
 
 *   **[tokenizer.py](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/tokenizer.py)**: Python implementation of BBPE Tokenizer. Can save/load in the exact binary format used by Java's `BPETokenizer`.
-*   **[train.py](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/train.py)**: The PyTorch trainer. Sets up BBPE tokenization, loads and cleans text files, trains the multi-layer Causal Transformer with cross-entropy loss and AdamW, and exports the final model to `model.onnx`.
+*   **[train.py](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/train.py)**: The Hugging Face training script. Initializes tokenizer, tokenizes the corpus, configures `LlamaForCausalLM`, runs training via HF `Trainer` with validation checkpoints and early stopping, and exports the final model to `model.onnx`.
 *   **[OnnxLanguageModel.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/src/main/java/com/learnai/words/nn/OnnxLanguageModel.java)**: Loads `model.onnx` using the Java ONNX Runtime library. Feeds input tokens as a 2D tensor and retrieves output logits.
 *   **[TextGenerator.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/src/main/java/com/learnai/words/nn/TextGenerator.java)**: Auto-regressive text generator executing temperature softmax and Top-K candidate sampling on the ONNX model output logits.
 *   **[PromptCLI.java](file:///home/markvasey/Dropbox/GitHub/mystuff/LearnAI-Wordsv5/src/main/java/com/learnai/words/cli/PromptCLI.java)**: Interactive terminal prompt client.
@@ -313,13 +307,13 @@ If the teacher only tests the student on the 100 practice questions, a student w
 
 ---
 
-## 📈 Case Study: v2 vs. v4 Performance & Learning
+## 📈 Case Study: v2 vs. v5 Performance & Learning
 
-A direct comparison of training the **Fictional Literature** dataset (2.36M cleaned tokens) on an NVIDIA GPU using the old v2 custom CUDA framework versus the new v4 PyTorch-to-ONNX pipeline:
+A direct comparison of training the **Fictional Literature** dataset (2.36M cleaned tokens) on an NVIDIA GPU using the old v2 custom CUDA framework versus the new Hugging Face pipeline (`v5`):
 
 ### 1. Model Configuration & Performance
 
-| Metric | LearnAI-Wordsv2 (Custom CUDA) | LearnAI-Wordsv5 (PyTorch + ONNX) | Improvement / Shift |
+| Metric | LearnAI-Wordsv2 (Custom CUDA) | LearnAI-Wordsv5 (Hugging Face + ONNX) | Improvement / Shift |
 | :--- | :---: | :---: | :--- |
 | **Active Parameters** | 3,220,992 (3.22M) | **49,820,160 (49.8M)** | ~15x capacity increase |
 | **Attention Mechanism** | Single-head Attention | **8-head Grouped-Query Attention (GQA)** | 4x faster KV Cache during generation |
@@ -344,7 +338,7 @@ to the same I would be to be a great of the other.”
 “What, I’ve the time; and I said, I’]
 ```
 
-*   **Zero `<UNK>` Pollution**: Unlike `v3` where dialogue punctuation or contractions (e.g. `don<UNK>t`) were replaced by raw `<UNK>` tokens due to character-level BPE limits, `v4` natively outputs curly double quotes (`“` / `”`) and curly apostrophes (`I’ll`, `I’ve`) from Epoch 1.
+*   **Zero `<UNK>` Pollution**: Unlike `v3` where dialogue punctuation or contractions (e.g. `don<UNK>t`) were replaced by raw `<UNK>` tokens due to character-level BPE limits, `v5` natively outputs curly double quotes (`“` / `”`) and curly apostrophes (`I’ll`, `I’ve`) from Epoch 1.
 *   **Gutenberg Metadata Elimination**: The regex-based text cleansing successfully keeps the training sequences free of Gutenberg index headers, transcriber labels, or random page numbers.
 *   **Dialogue Conventions**: Even at Epoch 1, the model is already learning to nest dialogue segments on new lines and matches opening and closing double quotation marks.
 
@@ -410,7 +404,7 @@ $$Y = W_{\text{combined}} \cdot X$$
 Consequently, a deep network composed of pure matrix multiplications is mathematically identical to a single-layer linear model. It can only draw straight lines (linear separations) and cannot model curves, logical XOR gates, or complex syntactic hierarchies.
 
 ### 2. Bending Space with Activation Functions
-To prevent the stacked matrices from collapsing, we introduce a **non-linear activation function** between the multiplications. In `v4`, we use the **SwiGLU** activation.
+To prevent the stacked matrices from collapsing, we introduce a **non-linear activation function** between the multiplications. In `v5`, we use the **SwiGLU** activation natively supported by the Hugging Face LLaMA architecture.
 
 #### SwiGLU (Swish Gated Linear Unit) — The State-of-the-Art Choice
 SwiGLU is a gated linear unit that uses the Swish activation function. It is defined as:
@@ -541,7 +535,8 @@ Each epoch has 2,412 steps and takes **~15 minutes** (compared to 25 minutes in 
 | **1** | 2.1173 | 2.1045 | 8.20 | `[The The ball smiled. The little girl smiled, and the ball was so happy. The ball and the little girl became best friends in the park...]` | Time: 916s (~15 min). Warmup completes. High sentence structure alignment, no `<UNK>` tags, dialogue punctuation is fully established immediately. |
 | **2** | 1.6043 | 1.6175 | 5.04 | `[The John got a bit scared, but he stood there too. Suddenly, the sky turned dark and the sky became dark. John was scared. "Who's there?" Timmy shouted...]` | Time: ~15 min. Perplexity drops to 5.04. Strong narrative context and conversational flow, with minor phrase repetition. |
 | **3** | 1.4397 | 1.4636 | 4.32 | `[The The end.--- Story 24718 --- Once upon a time, there was a mommy and a baby. The baby was very impatient and wanted to go outside and play. Mommy said no. The baby didn't understand...]` | Time: ~15 min. Perplexity drops to 4.32. The model learns complex vocabulary ("impatient") and structures story headers and transitions correctly. |
-| **4** | 1.3554* | *Pending* | *Pending* | *In Progress (Batch 1064/2412)* | *Running... Cosine learning rate decay starts (LR: 2.99e-04).* |
+| **4** | 1.3266 | 1.3869 | 4.00 | `[The The dog was so proud of himself, and he couldn't stop grinning. He ran around the park with a big smile on his face. He was happy that he was able to show...]` | Time: ~15 min. Perplexity drops to 4.00. Sentence structure is highly fluent. Learns complex narrative context ("proud of himself", "couldn't stop grinning"). |
+| **5** | 1.2354* | *Pending* | *Pending* | *In Progress (Batch 1452/2412)* | *Running... Learning rate is at 2.97e-04.* |
 
 *\*Note: Indicates the latest recorded loss in the active epoch before log dump.*
 
