@@ -37,7 +37,8 @@ public class VideoPanel extends JPanel {
 
     private final YoloPoseDetector yoloDetector;
     private final SeizureDetector seizureDetector;
-    private final boolean ownsDetector;
+    private final boolean ownsDetector;   // owns yoloDetector
+    private final boolean ownsSeizureDetector; // owns seizureDetector
     private String cameraName = "Tapo Camera";
     private boolean selected = false;
     private String connectionError = null;
@@ -52,6 +53,7 @@ public class VideoPanel extends JPanel {
         this.yoloDetector = new YoloPoseDetector();
         this.seizureDetector = new SeizureDetector();
         this.ownsDetector = true;
+        this.ownsSeizureDetector = true;
         setBackground(Color.BLACK);
         setLayout(new BorderLayout());
     }
@@ -60,6 +62,17 @@ public class VideoPanel extends JPanel {
         this.yoloDetector = yoloDetector;
         this.seizureDetector = new SeizureDetector();
         this.ownsDetector = false;
+        this.ownsSeizureDetector = true;
+        setBackground(Color.BLACK);
+        setLayout(new BorderLayout());
+    }
+
+    /** Used by VideoGridPanel to share a single SeizureDetector across all feeds. */
+    public VideoPanel(YoloPoseDetector yoloDetector, SeizureDetector seizureDetector) {
+        this.yoloDetector = yoloDetector;
+        this.seizureDetector = seizureDetector;
+        this.ownsDetector = false;
+        this.ownsSeizureDetector = false;
         setBackground(Color.BLACK);
         setLayout(new BorderLayout());
     }
@@ -519,7 +532,7 @@ public class VideoPanel extends JPanel {
         if (yoloDetector != null && ownsDetector) {
             yoloDetector.close();
         }
-        if (seizureDetector != null) {
+        if (seizureDetector != null && ownsSeizureDetector) {
             seizureDetector.close();
         }
     }

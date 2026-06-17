@@ -22,7 +22,7 @@ A seizure alert is raised when **either engine** reports a positive result — t
 ## 🚀 Key GPU & AI Features
 
 *   **GPU Pose Estimation (YOLOv8-Pose):** Tracks 17 human skeletal joint coordinates in real-time. Driven by an ONNX model loaded into **ONNX Runtime GPU** using the native `CUDAExecutionProvider`.
-*   **Spatio-Temporal Transformer Seizure Classifier:** A compact encoder-only Transformer (`SeizureTransformer`, 64-dim, 4-head, 2-layer) classifies 32-frame sliding windows of normalised skeletal coordinates. Trained from scratch on patient video datasets using the Hugging Face `Trainer` API with `bfloat16` precision and `torch.compile`. Exported to ONNX (opset 18, IR v10) and loaded via ONNX Runtime 1.22.0.
+*   **Spatio-Temporal Transformer Seizure Classifier:** A compact encoder-only Transformer (`SeizureTransformer`, 64-dim, 4-head, 2-layer) classifies 32-frame sliding windows of normalised skeletal coordinates. Trained from scratch on patient video datasets using the Hugging Face `Trainer` API with `bfloat16` precision and `torch.compile`. Exported to ONNX (opset 18, IR v10) and loaded via ONNX Runtime 1.22.0 with the **CUDA Execution Provider** (GPU). A single shared session is used across all active camera feeds.
 *   **End-to-End GPU Preprocessing (Priority 3):** Replaces the OpenCV CPU conversions and Java pixel loops with a unified GPU preprocessing pipeline. BGR frames are uploaded via `cudaMemcpy2DAsync` (handling OpenCV row padding) and resized, swapped to RGB, cast to float32, and normalized entirely on the GPU using NVIDIA Performance Primitives (NPP). A custom CUDA transposition kernel rearranges the interleaved layout to planar `[C×H×W]` directly into a zero-copy direct ByteBuffer.
 *   **NPP Thread-Safety (NPP Ctx API):** Replaced non-thread-safe global NPP stream setters with the `_Ctx` API. Thread-local streams and static device memory allocations are bound to thread-local `NppStreamContext` structs, enabling multiple streams to run on the GPU concurrently without race conditions or memory corruption.
 *   **Panama FFM CUDA Fallback (Occlusion Handling):** When a patient is under bedding (causing joint tracking confidence to drop), the pipeline falls back to pixel-level motion differences. Calculations are offloaded to a custom GPU L1 norm difference NPP statistics kernel (`libseizure_cuda.so`) written in CUDA C++ and called via Java's modern FFM API (`java.lang.foreign`), achieving near-zero overhead.
@@ -193,15 +193,21 @@ The full video dataset — **36 videos**, **62.63 minutes of footage**, **106,92
 
 ### 1. Host Packages
 ```bash
-# CUDA and cuDNN libraries (System76 / Pop!_OS)
+# CUDA and cuDNN libraries (System76 / Pop!_OS) — used by libseizure_cuda.so and YOLOv8 CUDA EP
 sudo apt install system76-cuda-11.2 system76-cuda-latest
 sudo apt install system76-cudnn-11.2
 ```
 
+> **ONNX Runtime 1.22.0 CUDA EP** requires `libcublasLt.so.12`. If you have [Ollama](https://ollama.com) installed, this is already present at `/usr/local/lib/ollama/cuda_v12/` and `run.sh` adds it to `LD_LIBRARY_PATH` automatically. If not, install the CUDA 12 toolkit from [developer.nvidia.com](https://developer.nvidia.com/cuda-downloads).
+
 ### 2. Environment Variables
 ```bash
-export LD_LIBRARY_PATH=/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+# cuda-11.2: required for libseizure_cuda.so (custom NPP kernels) and YOLOv8 CUDA EP
+# ollama/cuda_v12: provides libcublasLt.so.12 for ONNX Runtime 1.22.0 SeizureTransformer GPU EP
+export LD_LIBRARY_PATH="/usr/local/lib/ollama/cuda_v12:/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH"
 ```
+
+> `run.sh` sets this automatically.
 
 ### 3. Python Training Environment
 ```bash
@@ -243,10 +249,12 @@ sudo nvidia-smi -pm 1
 ### 3. Transformer Inference Overhead
 | Setting | Latency |
 | :--- | :--- |
-| **CPU inference** (ONNX Runtime, 2-layer, 64-dim) | ~1–2 ms per frame |
-| **GPU inference** (CUDA EP, when cuBLAS available) | ~0.2–0.5 ms per frame |
+| **GPU inference** (ONNX Runtime 1.22.0, CUDA EP via Ollama CUDA 12 libs) | ~0.2–0.5 ms per inference |
+| **CPU inference** (fallback if CUDA EP unavailable) | ~1–2 ms per inference |
 | **ONNX model size** | 262 KB |
-| **Window stride** | Every processed frame (32-frame rolling buffer) |
+| **Shared sessions** | 1 `SeizureDetector` shared across all camera feeds (mirrors `YoloPoseDetector`) |
+| **Window stride** | Every processed frame (32-frame rolling buffer per tracked person) |
+| **8-camera load (GPU)** | 8 cams × 10 fps × 0.3 ms = **~24 ms GPU time/s** |
 
 ### 4. Overall Test Suite Runtime
 *   **Original (CPU-bound, sequential):** 15m 53s
@@ -337,11 +345,11 @@ java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
 | Class | Package | Responsibility |
 | :--- | :--- | :--- |
 | `CudaBridge` | `math` | Links Java `MethodHandle` calls to `libseizure_cuda.so` via Panama FFM. Handles off-heap `MemorySegment` passing for preprocessing and optical flow. |
-| `YoloPoseDetector` | `math` | GPU preprocessing pipeline, synchronized ONNX GPU session, NMS post-processing. Outputs 17 joint keypoints per person. |
-| `SeizureDetector` | `math` | Loads `seizure_transformer.onnx` via ONNX Runtime. Accepts a `float[32][51]` window, returns `P(seizure)`. Falls back to CPU if CUDA EP unavailable. |
+| `YoloPoseDetector` | `math` | GPU preprocessing pipeline, synchronized ONNX GPU session, NMS post-processing. Outputs 17 joint keypoints per person. **One shared instance** across all camera feeds. |
+| `SeizureDetector` | `math` | Loads `seizure_transformer.onnx` via ONNX Runtime 1.22.0 (CUDA EP). Accepts a `float[32][51]` window, returns `P(seizure)`. **One shared instance** across all camera feeds; thread-safe via `synchronized(session)`. |
 | `TrackedPerson` | `model` | Per-person state machine. Maintains: (1) motion history for FFT, (2) 32-frame circular skeletal buffer for Transformer, (3) two-stage FFT alert state, (4) transformer verdict. |
-| `VideoPanel` | `ui` | RTSP stream loop via JavaCV. Invokes YOLOv8 detection, calls `addSkeletalFrame` + Transformer inference each frame, renders skeleton wireframes and detection overlays. |
-| `VideoGridPanel` | `ui` | Dynamic camera grid. Parallel auto-discovery, shared `YoloPoseDetector` session across all feeds. |
+| `VideoPanel` | `ui` | RTSP stream loop via JavaCV. Invokes YOLOv8 detection, calls `addSkeletalFrame` + Transformer inference each frame, renders skeleton wireframes and detection overlays. Accepts injected shared detectors or creates its own for standalone use. |
+| `VideoGridPanel` | `ui` | Dynamic camera grid. Parallel auto-discovery. Creates and owns **one shared `YoloPoseDetector`** and **one shared `SeizureDetector`**, injecting both into each `VideoPanel`. |
 | `ControlPanel` | `ui` | UI configuration, credential loading, PTZ ONVIF movements, stream connection coordination. |
 | `DatasetExtractor` | `cli` (test) | Processes labelled training videos through the full GPU pipeline, writes normalised skeletal JSON for Transformer training. |
 

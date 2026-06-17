@@ -1,5 +1,6 @@
 package com.tapoviewer.ui;
 
+import com.tapoviewer.math.SeizureDetector;
 import com.tapoviewer.math.YoloPoseDetector;
 import com.tapoviewer.model.PersonSnapshot;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ public class VideoGridPanel extends JPanel {
 
     private final List<VideoPanel> videoPanels = new ArrayList<>();
     private final YoloPoseDetector sharedDetector;
+    private final SeizureDetector sharedSeizureDetector;
     private Consumer<PersonSnapshot> snapshotListener;
     private Consumer<String> selectionListener;
     private String selectedCameraName = null;
@@ -24,8 +26,11 @@ public class VideoGridPanel extends JPanel {
     public VideoGridPanel() {
         setLayout(new GridLayout(1, 1, 5, 5)); // Default to single cell
         setBackground(Color.BLACK);
-        // Initialize one shared YoloPoseDetector instance for all camera feeds
+        // One shared YoloPoseDetector and SeizureDetector across all camera feeds.
+        // Both are thread-safe (synchronized on their OrtSession) so all VideoPanel
+        // worker threads can call them concurrently without contention.
         sharedDetector = new YoloPoseDetector();
+        sharedSeizureDetector = new SeizureDetector();
     }
 
     public void setSnapshotListener(Consumer<PersonSnapshot> listener) {
@@ -61,7 +66,7 @@ public class VideoGridPanel extends JPanel {
             String name = entry.getKey();
             String ip = entry.getValue();
 
-            VideoPanel panel = new VideoPanel(sharedDetector);
+            VideoPanel panel = new VideoPanel(sharedDetector, sharedSeizureDetector);
             panel.setSnapshotListener(snapshotListener);
             
             // Add click selection listener to panel
@@ -107,6 +112,9 @@ public class VideoGridPanel extends JPanel {
         videoPanels.clear();
         if (sharedDetector != null) {
             sharedDetector.close();
+        }
+        if (sharedSeizureDetector != null) {
+            sharedSeizureDetector.close();
         }
     }
 }
