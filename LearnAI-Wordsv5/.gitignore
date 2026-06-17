@@ -54,6 +54,7 @@ model_old.bin
 tokenizer.bin
 tokenizer.bin.json
 tokens.bin
+checkpoints/
 
 
 Models/

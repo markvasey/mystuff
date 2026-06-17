@@ -270,6 +270,7 @@ def main():
         metric_for_best_model="eval_loss" if not is_test_run else None,
         greater_is_better=False,
         remove_unused_columns=False,
+        label_names=["labels"],
     )
 
     # 6. Initialize Trainer
