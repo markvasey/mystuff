@@ -158,15 +158,34 @@ cp seizure_transformer.onnx src/main/resources/
 
 ---
 
-## 🧠 Two-Stage FFT Seizure Verification & Validation
+## 🧠 Two-Stage Verification & Dual-Engine Fusion Logic
 
-To suppress transient false alarms while providing a robust alert for actual clinical seizures, the FFT engine uses a **Two-Stage Temporal Density Validation Filter**:
+To suppress transient false alarms while providing a highly sensitive alert for actual clinical seizures, the system uses a **Two-Stage Verification Filter** for the FFT engine and fuses it with the Spatio-Temporal Transformer via a logical **OR** gate.
 
-### 1. Two-Stage Alert Architecture
-*   **Stage 1: Suspected Seizure (Warning — ORANGE BOX):** Triggered when the core FFT analysis (clonic band dominance $\ge 30\%$, peak amplitude $> 25.0$, and PAPR $> 2.2$) is satisfied for at least **2 consecutive processed frames**.
-*   **Stage 2: Confirmed Seizure (Alarm — RED BOX):** Triggered when the Warning state has been active for a cumulative total of **$\ge 0.5$ seconds** (5 frames @ 10 fps, or 10 frames @ 20 fps) within the last **15 seconds**.
-*   **Transformer Fusion:** A RED alarm is also raised immediately if the Transformer's `P(seizure) ≥ 0.65`, regardless of FFT state. Both signals are ORed into `isSeizureConfirmed()`.
-*   **UI & Snapshot Filtering:** Renders an Orange Warning Box for Stage 1, a thick Red Alarm Box for Stage 2 / transformer alarm, and restricts off-heap JPEG snapshot captures strictly to confirmed states.
+### 1. Engine Responsibilities: Warning vs. Actual Seizure
+
+*   **Engine A (FFT):** Responsible for detecting rhythmic, clonic movements. It uses a temporal density filter to distinguish transient movements (such as turning in bed) from sustained seizures:
+    *   **Warning Stage (Orange Alert):** Triggered when core FFT criteria (clonic band dominance $\ge 30\%$, peak amplitude $> 25.0$, and PAPR $> 2.2$) are met for at least **2 consecutive frames**.
+    *   **Confirmed Seizure Stage (Red Alert):** Triggered when the Warning state has been active for a cumulative total of **$\ge 0.5$ seconds** (5 frames @ 10 fps) within the last **15 seconds**.
+*   **Engine B (Transformer):** Responsible for recognizing learned spatio-temporal posture patterns over a sliding 3.2-second window. It classifies movement instantly:
+    *   **Warning Stage:** The Transformer does not have a separate warning stage.
+    *   **Confirmed Seizure Stage (Red Alert):** Triggered **immediately** if the model predicts a seizure probability $P(\text{seizure}) \ge 0.65$ on any single inference run.
+
+### 2. Dual-Engine Decision Fusion Table
+
+The overall status of a `TrackedPerson` is determined by ORing the two engines together:
+$$\text{Actual Seizure (Red Alert)} = \text{FFT Confirmed} \lor \text{Transformer Seizure}$$
+
+| Scenario | Engine A (FFT) | Engine B (Transformer) | UI State | Audible Alarm & Snapshot |
+| :--- | :--- | :--- | :--- | :--- |
+| **Normal sleep movement** | Normal | $P(\text{seizure}) < 0.65$ | Green Box (Normal) | No |
+| **Brief scratch or roll-over** | Warning (Orange) for 1–2 frames | $P(\text{seizure}) < 0.65$ | Orange Box (Warning) | No |
+| **Sustained rhythmic shaking** | Confirmed (Red) after $\ge 0.5$s | $P(\text{seizure}) < 0.65$ | Red Box (Alarm) | **Yes** (FFT Triggered) |
+| **Atypical or sudden seizure** | Normal (no rhythm detected yet) | $P(\text{seizure}) \ge 0.65$ | Red Box (Alarm) | **Yes** (Transformer Triggered) |
+
+### 3. UI & Snapshot Filtering
+*   **Orange Box:** Rendered for Stage 1 (FFT Warning) to give a visual heads-up without triggering audible alarms.
+*   **Red Box:** Rendered for Stage 2 (FFT Confirmed) or a positive Transformer prediction. This triggers the audible alarm and initiates off-heap JPEG snapshot captures.
 
 ### 2. Core Bug Fixes
 *   **Stale Keypoint Displacement Prevention:** Added `isDetectedInCurrentFrame()` check. When a person is temporarily undetected (e.g., under blankets), the system stops calculating displacement using stale coordinates and falls back to CUDA pixel-difference motion.
