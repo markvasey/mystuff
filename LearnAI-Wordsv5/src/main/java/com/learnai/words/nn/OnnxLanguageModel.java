@@ -12,7 +12,16 @@ public class OnnxLanguageModel implements AutoCloseable {
 
     public OnnxLanguageModel(String modelPath) throws Exception {
         this.env = OrtEnvironment.getEnvironment();
-        this.session = env.createSession(modelPath, new OrtSession.SessionOptions());
+        System.out.println("OnnxLanguageModel: Available Execution Providers in environment: " + OrtEnvironment.getAvailableProviders());
+        OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
+        opts.setSessionLogLevel(ai.onnxruntime.OrtLoggingLevel.ORT_LOGGING_LEVEL_INFO);
+        try {
+            opts.addCUDA(0);
+            System.out.println("OnnxLanguageModel: CUDA Execution Provider enabled successfully.");
+        } catch (Exception e) {
+            System.out.println("OnnxLanguageModel: CUDA EP not available, falling back to CPU: " + e.getMessage());
+        }
+        this.session = env.createSession(modelPath, opts);
     }
 
     /**
