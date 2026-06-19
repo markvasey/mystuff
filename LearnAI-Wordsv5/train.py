@@ -228,10 +228,11 @@ def main():
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {params:,}")
 
-    # Compile the model if requested
-    if device.type == "cuda" and not args.no_compile:
-        print("Compiling model graph using torch.compile(mode='reduce-overhead')...")
-        model = torch.compile(model, mode="reduce-overhead")
+    # Compile the model if requested via TrainingArguments instead of manually wrapping it,
+    # so that checkpoints are saved cleanly without the '_orig_mod.' prefix.
+    compile_model = (device.type == "cuda" and not args.no_compile)
+    if compile_model:
+        print("Model will be compiled during training using torch.compile(mode='reduce-overhead')...")
 
     # 5. Set up Training Arguments
     use_bf16 = (device.type == "cuda")
@@ -271,6 +272,8 @@ def main():
         greater_is_better=False,
         remove_unused_columns=False,
         label_names=["labels"],
+        torch_compile=compile_model,
+        torch_compile_mode="reduce-overhead" if compile_model else None,
     )
 
     # 6. Initialize Trainer

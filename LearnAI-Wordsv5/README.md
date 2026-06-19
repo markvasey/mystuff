@@ -530,15 +530,77 @@ The following table documents the progression of the newly optimized Hugging Fac
 
 Each epoch has 2,412 steps and takes **~15 minutes** (compared to 25 minutes in the original bespoke Run #2):
 
-| Epoch | Train Loss | Val Loss | Perplexity ($e^{\text{Loss}}$) | Generated Sample Snippet | Learning Milestones & Observations |
-| :---: | :---: | :---: | :---: | :--- | :--- |
-| **1** | 2.1173 | 2.1045 | 8.20 | `[The The ball smiled. The little girl smiled, and the ball was so happy. The ball and the little girl became best friends in the park...]` | Time: 916s (~15 min). Warmup completes. High sentence structure alignment, no `<UNK>` tags, dialogue punctuation is fully established immediately. |
-| **2** | 1.6043 | 1.6175 | 5.04 | `[The John got a bit scared, but he stood there too. Suddenly, the sky turned dark and the sky became dark. John was scared. "Who's there?" Timmy shouted...]` | Time: ~15 min. Perplexity drops to 5.04. Strong narrative context and conversational flow, with minor phrase repetition. |
-| **3** | 1.4397 | 1.4636 | 4.32 | `[The The end.--- Story 24718 --- Once upon a time, there was a mommy and a baby. The baby was very impatient and wanted to go outside and play. Mommy said no. The baby didn't understand...]` | Time: ~15 min. Perplexity drops to 4.32. The model learns complex vocabulary ("impatient") and structures story headers and transitions correctly. |
-| **4** | 1.3266 | 1.3869 | 4.00 | `[The The dog was so proud of himself, and he couldn't stop grinning. He ran around the park with a big smile on his face. He was happy that he was able to show...]` | Time: ~15 min. Perplexity drops to 4.00. Sentence structure is highly fluent. Learns complex narrative context ("proud of himself", "couldn't stop grinning"). |
-| **5** | 1.2354* | *Pending* | *Pending* | *In Progress (Batch 1452/2412)* | *Running... Learning rate is at 2.97e-04.* |
+| Epoch | Train Loss | Val Loss | Perplexity ($e^{\text{Loss}}$) |
+| :---: | :---: | :---: | :---: |
+| **1** | 1.7410 | 2.1045 | 8.20 |
+| **2** | 1.4970 | 1.6175 | 5.04 |
+| **3** | 1.3560 | 1.4636 | 4.32 |
+| **4** | 1.2522 | 1.3869 | 4.00 |
+| **5** | 1.1522 | 1.3294 | 3.78 |
+| **6** | 1.0966 | 1.2874 | 3.62 |
+| **7** | 1.0138 | 1.1008 | 3.01 |
+| **8** | 0.9579 | 1.0918 | 2.98 |
+| **9** | 0.8951 | 1.0769 | 2.94 |
+| **10** | 0.8469 | 1.0596 | 2.89 |
+| **11** | 0.8013 | 1.0464 | 2.85 |
+| **12** | 0.7550 | 1.0321 | 2.81 |
+| **13** | 0.7166 | 1.0176 | 2.77 |
+| **14** | 0.6798 | 1.0017 | 2.72 |
+| **15** | 0.6482 | 0.9895 | 2.69 |
+| **16** | 0.6175 | 0.9743 | 2.65 |
+| **17** | 0.5979 | 0.9598 | 2.61 |
+| **18** | 0.5645 | 0.9488 | 2.58 |
+| **19** | 0.5462 | 0.9329 | 2.54 |
+| **20** | 0.5312 | 0.9253 | 2.52 |
+| **21** | 0.5000 | 0.9114 | 2.49 |
+| **22** | 0.4811 | 0.8986 | 2.46 |
+| **23** | 0.4670 | 0.8842 | 2.42 |
+| **24** | 0.4455 | 0.8774 | 2.40 |
+| **25** | 0.4224 | 0.8700 | 2.39 |
+| **26** | 0.4128 | 0.8615 | 2.37 |
+| **27** | 0.3893 | 0.8511 | 2.34 |
+| **28** | 0.3777 | 0.8424 | 2.32 |
+| **29** | 0.3557 | 0.8361 | 2.31 |
+| **30** | 0.3435 | 0.8264 | 2.29 |
+| **31** | 0.3335 | 0.8233 | 2.28 |
+| **32** | 0.3189 | 0.8162 | 2.26 |
+| **33** | 0.3030 | 0.8045 | 2.24 |
+| **34** | 0.2892 | 0.8031 | 2.23 |
+| **35** | 0.2727 | 0.7964 | 2.22 |
+| **36** | 0.2600 | 0.7931 | 2.21 |
+| **37** | 0.2480 | 0.7955 | 2.22 |
+| **38** | 0.2386 | 0.7918 | 2.21 |
+| **39** | 0.2251 | 0.7903 | 2.20 |
+| **40** | 0.2176 | 0.7934 | 2.21 |
+| **41** | 0.2018 | **0.7891** | **2.20** |
+| **42** | 0.1908 | 0.7941 | 2.21 |
+| **43** | 0.1779 | 0.7964 | 2.22 |
+| **44** | 0.1978 | 0.8007 | 2.23 |
 
-*\*Note: Indicates the latest recorded loss in the active epoch before log dump.*
+*\*Note: Early stopping was triggered after Epoch 44 as validation loss failed to improve past the best checkpoint at Epoch 41 (Val Loss: 0.7891).*
+
+### 7. Learning Progression & Milestones (Run #3 Samples)
+
+The following sequence of generated samples highlights how the model's language capabilities, syntax structure, and narrative consistency evolved through the epochs:
+
+*   **Epoch 7 (Val Loss: 1.1008) — Basic Sentence Mechanics:**
+    The model masters paragraphs and punctuation, creating simple sentences with correct name/object associations:
+    > `[The Jill was very happy and excited. She and her mom held hands and went outside to the garden. Jill saw a big, green vegetable growing in the garden. She was very excited and asked her mom, "What is it?" Her mom smiled and said, "That is a cauliflower." ]`
+*   **Epoch 11 (Val Loss: 1.0464) — Multi-Speaker Dialogues:**
+    The model successfully tracks turn-taking conversations and develops semantic dialogue hooks:
+    > `[The Mummy was so excited, she took it in her hand and asked, "What are you?" The lady smiled and said, "I'm a film about an elderly man. He's very tired." Mummy was intrigued and asked, "Would you like to stay and watch it?" The lady nodded]`
+*   **Epoch 15 (Val Loss: 0.9895) — Complex Object Tracking:**
+    The model accurately tracks context and abstract object exchanges (a bird asking a rabbit for steel):
+    > `[The \nThe bird said: "I'm looking for something special. Do you know where I can find a piece of steel?" \nThe rabbit replied: "I can help you! My mommy has hidden some steel for me to find. It looks very old and expensive."\nThe bird thanked the]`
+*   **Epoch 20 (Val Loss: 0.9253) — Abstract Concepts & Personification:**
+    The model begins incorporating abstract narration and personification (e.g. the rabbit thanking the sun, and the sun smiling):
+    > `[The The rabbit hopped up and down. It was so gentle and the rabbit was sure it was scared. But it was okay. The rabbit knew it had made a mistake. The rabbit was ready and safe. So the little bird said a special thank you to the sun. The sun smiled and]`
+*   **Epoch 29 (Val Loss: 0.8361) — Fluid Narrative & Context Reassurance:**
+    The model generates complex vocabulary ("mighty jungle", "flexible") and models empathetic characters (an elephant reassuring a scared rabbit):
+    > `[The The elephant watched the rabbit and smiled. Then the elephant said, "Don't be afraid, little friend. I dare you to take a ride on my back in a mighty jungle!"The rabbit was scared but the elephant reassured it that it wouldn't be too deep and flexible. So, the]`
+*   **Epoch 31 (Val Loss: 0.8233) — Semantic Mastery & Playful Slips:**
+    At this stage, the model has near-perfect command of grammar and punctuation (and correctly outputs curly quotes `“`/`”` via BBPE), with only minor child-like semantic slips:
+    > `[The The little boy said thank you and ran off to tell his mom the story. His mom was so proud of him and said, “You’re so kind. I love helping you stand up on your own shoulders yet!”--- Story 164915 ---\nOne day, Mommy was]`
 
 ---
 
@@ -632,6 +694,18 @@ No, the loss in quality is either absolute zero or mathematically negligible:
 *   **Domain Limits:** TinyStories utilizes a highly restricted vocabulary. A 50M parameter model is already large enough to master 100% of the syntax and grammatical structures of this simple domain. 
 *   **Inference & Export Penalties:** The final ONNX model would grow to ~1.0 GB and run 10x slower on CPU in the Java client, while requiring huge system memory spikes during compilation.
 *   *Alternative Recommendation:* If you want to leverage extra hardware capacity to get a better model, **scale the dataset** to the full 2.1-million TinyStories corpus (~400M tokens), increase the context length (`--block_size 2048`), or increase vocabulary complexity (`--target_vocab_size 16384`).
+
+---
+
+### 5. Hugging Face Trainer & `torch.compile` Checkpoint Prefix Bug (Solved)
+
+During the Hugging Face retraining integration, a critical key-mismatch bug was discovered when loading saved checkpoints for evaluation, resuming training, or exporting to ONNX:
+* **The Symptom:** When loading weights from the best checkpoint using `LlamaForCausalLM.from_pretrained(best_checkpoint)`, the loader would report that all weights were `MISSING` (and therefore newly initialized randomly), while the checkpoint state dict contained `UNEXPECTED` keys prefixed with `_orig_mod.`. This resulted in `model.onnx` being exported with random, untrained weights.
+* **The Root Cause:** The model was manually compiled using `model = torch.compile(model)` in `train.py` *before* being passed to the Hugging Face `Trainer`. PyTorch's compiler wraps the model in a `_CompiledModule`, prepending `_orig_mod.` to all keys in the state dict. The `Trainer` then saved this compiled state dict directly to disk.
+* **The Fix:**
+  1. **Fixed the Script:** Removed the manual model compilation step in `train.py`, and instead set `torch_compile=True` and `torch_compile_mode="reduce-overhead"` directly inside `TrainingArguments`. This allows the `Trainer` to compile the model internally for performance, but automatically unwrap it and strip the `_orig_mod.` prefix when writing checkpoints.
+  2. **Repaired Existing Checkpoints:** We wrote a helper script (`convert_checkpoint.py`) that loaded the state dicts from `checkpoint-98933` and `checkpoint-106172`, removed the `_orig_mod.` prefix from all safetensors keys, and saved them back.
+  3. **Restored ONNX Weights:** We re-ran the ONNX exporter using the repaired checkpoint weights, ensuring `model.onnx` is now populated with the true trained weights.
 
 
 
