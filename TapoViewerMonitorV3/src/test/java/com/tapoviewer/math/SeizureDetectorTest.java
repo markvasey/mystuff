@@ -202,6 +202,65 @@ public class SeizureDetectorTest {
         }
     }
 
+    @Test
+    public void testPredictProbabilityReturnsMinusOneOnBadInput() {
+        try (SeizureDetector detector = new SeizureDetector()) {
+            assertEquals(-1.0f, detector.predictProbability(null), 0.001f,
+                    "predictProbability(null) should return -1.");
+            assertEquals(-1.0f, detector.predictProbability(new float[5][SeizureDetector.FEATURE_DIM]), 0.001f,
+                    "predictProbability(wrong length) should return -1.");
+        }
+    }
+
+    @Test
+    public void testConcurrentInferenceIsThreadSafe() throws InterruptedException {
+        // Verifies that a single shared SeizureDetector can be called from multiple
+        // threads simultaneously without crashing or returning nonsense probabilities.
+        // This mirrors the 8-camera production setup where VideoPanel worker threads
+        // all share one SeizureDetector instance.
+        final int NUM_THREADS = 8;
+        try (SeizureDetector detector = new SeizureDetector()) {
+            Thread[] threads = new Thread[NUM_THREADS];
+            float[] results = new float[NUM_THREADS];
+            Throwable[] errors = new Throwable[NUM_THREADS];
+
+            for (int t = 0; t < NUM_THREADS; t++) {
+                final int idx = t;
+                threads[t] = new Thread(() -> {
+                    try {
+                        float[][] window = buildZeroWindow();
+                        results[idx] = detector.predictProbability(window);
+                    } catch (Throwable e) {
+                        errors[idx] = e;
+                    }
+                });
+            }
+            for (Thread th : threads) th.start();
+            for (Thread th : threads) th.join(5000);
+
+            for (int t = 0; t < NUM_THREADS; t++) {
+                assertNull(errors[t], "Thread " + t + " threw: " + errors[t]);
+                assertTrue(results[t] >= 0.0f && results[t] <= 1.0f,
+                        "Thread " + t + " returned invalid probability: " + results[t]);
+            }
+        }
+    }
+
+    @Test
+    public void testIsSeizureDetectedMatchesIsSeizureConfirmed() {
+        // isSeizureDetected() and isSeizureConfirmed() should behave identically —
+        // both include FFT confirmed state OR transformer verdict.
+        TrackedPerson person = new TrackedPerson(new Rectangle(0, 0, 200, 400));
+        // No state set: both should be false
+        assertFalse(person.isSeizureDetected());
+        assertFalse(person.isSeizureConfirmed());
+        // Transformer only: both should be true
+        person.setTransformerSeizure(true);
+        assertTrue(person.isSeizureDetected());
+        assertTrue(person.isSeizureConfirmed());
+    }
+
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**
@@ -223,3 +282,4 @@ public class SeizureDetectorTest {
         return new float[SeizureDetector.SEQ_LEN][SeizureDetector.FEATURE_DIM];
     }
 }
+

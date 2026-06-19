@@ -449,12 +449,8 @@ public class VideoPanel extends JPanel {
             if (p1[2] > 0.45f && p2[2] > 0.45f) {
                 int x1 = x + (int) (p1[0] * ratio);
                 int y1 = y + (int) (p1[1] * ratio);
-                int x2 = x + (int) (p1[0] * ratio);
-                int y2 = y + (int) (p1[1] * ratio);
-                
-                // Let's connect p1 and p2 correctly
-                x2 = x + (int) (p2[0] * ratio);
-                y2 = y + (int) (p2[1] * ratio);
+                int x2 = x + (int) (p2[0] * ratio);
+                int y2 = y + (int) (p2[1] * ratio);
                 g2.drawLine(x1, y1, x2, y2);
             }
         }

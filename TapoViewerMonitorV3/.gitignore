@@ -26,6 +26,9 @@ transformer_checkpoints/
 # Design scratch notes — not for version control
 thoughts.txt
 
+# Local CUDA symlink shims (libcufft.so.11 etc.) created by run.sh setup
+lib/
+
 # Training video datasets — large binary files, not for version control
 TestVideos/
 

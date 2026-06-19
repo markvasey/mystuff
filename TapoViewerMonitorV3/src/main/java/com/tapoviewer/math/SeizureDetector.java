@@ -38,10 +38,6 @@ public class SeizureDetector implements AutoCloseable {
     private final OrtSession session;
     private final String inputName;
 
-    /** Pre-allocated buffer for the entire input tensor (avoids per-frame allocation). */
-    private final FloatBuffer inputBuffer =
-            FloatBuffer.allocate(SEQ_LEN * FEATURE_DIM);
-
     public SeizureDetector() {
         try {
             this.env = OrtEnvironment.getEnvironment();
@@ -77,26 +73,31 @@ public class SeizureDetector implements AutoCloseable {
     /**
      * Runs inference on a {@code [SEQ_LEN × FEATURE_DIM]} feature window.
      *
+     * <p>This method is thread-safe: a local {@link FloatBuffer} is created per call
+     * (cheap — 32×51×4 = 6.5 KB stack-friendly allocation) so concurrent calls from
+     * multiple camera threads cannot corrupt each other's input data.
+     *
      * @param window row-major float array of shape {@code [SEQ_LEN][FEATURE_DIM]}.
      *               Each row is one frame's normalised skeletal feature vector.
      * @return {@code true} when the model predicts a seizure with sufficient confidence.
      */
     public boolean predict(float[][] window) {
         if (window == null || window.length != SEQ_LEN) {
-            logger.warn("SeizureDetector.predict: unexpected window length {}", window == null ? "null" : window.length);
+            logger.warn("SeizureDetector.predict: unexpected window length {}",
+                    window == null ? "null" : window.length);
             return false;
         }
 
-        // Flatten [SEQ_LEN][FEATURE_DIM] → float[] for ONNX tensor
-        inputBuffer.clear();
+        // Local buffer per call — safe for concurrent use across 8 camera threads.
+        FloatBuffer buf = FloatBuffer.allocate(SEQ_LEN * FEATURE_DIM);
         for (float[] frame : window) {
-            inputBuffer.put(frame, 0, FEATURE_DIM);
+            buf.put(frame, 0, FEATURE_DIM);
         }
-        inputBuffer.rewind();
+        buf.rewind();
 
         try {
             OnnxTensor inputTensor = OnnxTensor.createTensor(
-                    env, inputBuffer, new long[]{1, SEQ_LEN, FEATURE_DIM});
+                    env, buf, new long[]{1, SEQ_LEN, FEATURE_DIM});
 
             OrtSession.Result result;
             synchronized (session) {
@@ -106,7 +107,7 @@ public class SeizureDetector implements AutoCloseable {
             try (result) {
                 float[][] probs = (float[][]) result.get(0).getValue(); // [1][2]
                 float seizureProb = probs[0][1];
-                logger.debug("SeizureDetector: P(seizure)={:.3f}", seizureProb);
+                logger.debug("SeizureDetector: P(seizure)={}", seizureProb);
                 return seizureProb >= SEIZURE_THRESHOLD;
             } finally {
                 inputTensor.close();
@@ -127,15 +128,16 @@ public class SeizureDetector implements AutoCloseable {
     public float predictProbability(float[][] window) {
         if (window == null || window.length != SEQ_LEN) return -1.0f;
 
-        inputBuffer.clear();
+        // Local buffer per call — safe for concurrent use.
+        FloatBuffer buf = FloatBuffer.allocate(SEQ_LEN * FEATURE_DIM);
         for (float[] frame : window) {
-            inputBuffer.put(frame, 0, FEATURE_DIM);
+            buf.put(frame, 0, FEATURE_DIM);
         }
-        inputBuffer.rewind();
+        buf.rewind();
 
         try {
             OnnxTensor inputTensor = OnnxTensor.createTensor(
-                    env, inputBuffer, new long[]{1, SEQ_LEN, FEATURE_DIM});
+                    env, buf, new long[]{1, SEQ_LEN, FEATURE_DIM});
 
             OrtSession.Result result;
             synchronized (session) {
@@ -157,11 +159,10 @@ public class SeizureDetector implements AutoCloseable {
 
     @Override
     public void close() {
+        // Only close the session — OrtEnvironment is a process-wide singleton
+        // and must not be closed while other sessions (e.g. YoloPoseDetector) are running.
         try {
             if (session != null) session.close();
-        } catch (Exception ignored) {}
-        try {
-            if (env != null) env.close();
         } catch (Exception ignored) {}
     }
 }

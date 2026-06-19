@@ -191,23 +191,25 @@ The full video dataset — **36 videos**, **62.63 minutes of footage**, **106,92
 
 ## 📦 System Dependencies & Requirements
 
-### 1. Host Packages
+### 1. Host Packages & Pip Libraries
 ```bash
-# CUDA and cuDNN libraries (System76 / Pop!_OS) — used by libseizure_cuda.so and YOLOv8 CUDA EP
-sudo apt install system76-cuda-11.2 system76-cuda-latest
-sudo apt install system76-cudnn-11.2
+# CUDA libraries (System76 / Pop!_OS) — used by libseizure_cuda.so (native FFM module)
+sudo apt install system76-cuda-11.2
 ```
 
-> **ONNX Runtime 1.22.0 CUDA EP** requires `libcublasLt.so.12`. If you have [Ollama](https://ollama.com) installed, this is already present at `/usr/local/lib/ollama/cuda_v12/` and `run.sh` adds it to `LD_LIBRARY_PATH` automatically. If not, install the CUDA 12 toolkit from [developer.nvidia.com](https://developer.nvidia.com/cuda-downloads).
+To support **ONNX Runtime 1.22.0 CUDA EP** (which requires CUDA 12 and cuDNN 9) without modifying system-level packages or requiring root access, you can install the official NVIDIA CUDA 12 / cuDNN 9 libraries locally using `pip`:
+
+```bash
+pip3 install --user nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-cuda-runtime-cu12 nvidia-cublas-cu12
+```
+
+These packages provide all required libraries (`libcudnn.so.9`, `libcufft.so.11`, `libcudart.so.12`, `libcublas.so.12`, `libnvrtc.so.12`, `libnvjitlink.so.12`) under the user's home directory. The launcher script (`run.sh`) automatically prioritises these pip paths in the `LD_LIBRARY_PATH` search order.
 
 ### 2. Environment Variables
+No manual environment setup is required. The launcher script (`run.sh`) automatically configures the appropriate `LD_LIBRARY_PATH` to prioritize local pip-installed libraries and fall back to system CUDA 11.2 libraries for the native NPP kernels:
 ```bash
-# cuda-11.2: required for libseizure_cuda.so (custom NPP kernels) and YOLOv8 CUDA EP
-# ollama/cuda_v12: provides libcublasLt.so.12 for ONNX Runtime 1.22.0 SeizureTransformer GPU EP
-export LD_LIBRARY_PATH="/usr/local/lib/ollama/cuda_v12:/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$HOME/.local/lib/python3.10/site-packages/nvidia/cufft/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cublas/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cuda_runtime/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cudnn/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/nvjitlink/lib:$(pwd)/lib:/usr/local/lib/ollama/cuda_v12:/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH"
 ```
-
-> `run.sh` sets this automatically.
 
 ### 3. Python Training Environment
 ```bash

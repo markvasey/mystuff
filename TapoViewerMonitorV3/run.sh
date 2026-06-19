@@ -17,11 +17,12 @@ echo "Using Java at: $(which java)"
 java -version
 
 # 2. Set CUDA library paths
+# - pip-installed NVIDIA packages for CUDA 12 / cuDNN 9 support (including cufft, cublas, cudart, nvjitlink, cudnn)
+# - lib/: project-local symlinks (libcufft.so.11, libcufftw.so.11) required by ORT 1.22.0 CUDA EP (pip version takes priority)
 # - cuda-11.2: required for libseizure_cuda.so (custom NPP kernels) and YOLOv8 CUDA EP
 # - ollama/cuda_v12: provides libcublasLt.so.12 required by ONNX Runtime 1.22.0 GPU EP
-#   for the SeizureTransformer model (Ollama is already installed on this machine)
-export LD_LIBRARY_PATH="/usr/local/lib/ollama/cuda_v12:/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH"
-echo "LD_LIBRARY_PATH set (CUDA 11.2 + CUDA 12 cublas)."
+export LD_LIBRARY_PATH="$HOME/.local/lib/python3.10/site-packages/nvidia/cufft/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cublas/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cuda_runtime/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/cudnn/lib:$HOME/.local/lib/python3.10/site-packages/nvidia/nvjitlink/lib:$(pwd)/lib:/usr/local/lib/ollama/cuda_v12:/usr/lib/cuda-11.2/targets/x86_64-linux/lib:$LD_LIBRARY_PATH"
+echo "LD_LIBRARY_PATH set (pip CUDA12/cuDNN9 + local lib + CUDA 11.2 + CUDA 12 cublas)."
 
 # 3. Check NVIDIA Persistence Mode
 if command -v nvidia-smi &> /dev/null; then
