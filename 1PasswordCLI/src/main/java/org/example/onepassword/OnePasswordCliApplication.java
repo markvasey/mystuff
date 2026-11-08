@@ -43,6 +43,20 @@ public class OnePasswordCliApplication implements CommandLineRunner {
             boolean filterTrash = true;
             Scanner searchScanner = new Scanner(System.in);
 
+            String[][] categoryMenu = {
+                    {"0", "ALL", "All items"},
+                    {"1", "001", "Logins"},
+                    {"2", "003", "Secure Notes"},
+                    {"3", "002", "Credit Cards"},
+                    {"4", "005", "Passwords"},
+                    {"5", "109", "Wireless Routers"},
+                    {"6", "106", "Passports"},
+                    {"7", "107", "Reward Programmes"},
+                    {"8", "105", "Memberships"},
+                    {"9", "103", "Driver Licenses"},
+                    {"10", "ARCHIVE", "Archive"}
+            };
+
             boolean configureOptions = true;
             while (true) {
                 if (configureOptions) {
@@ -50,7 +64,7 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                         System.out.printf("Options: [1] Show raw decrypted: %s, [2] Filter Trash: %s%n",
                                 showRawDecrypted ? "Yes" : "No",
                                 filterTrash ? "Yes" : "No");
-                        System.out.print("Enter 1 or 2 to toggle options, or press Enter to search: ");
+                        System.out.print("Enter 1 or 2 to toggle options, or press Enter to continue: ");
                         if (!searchScanner.hasNextLine()) {
                             return;
                         }
@@ -72,8 +86,65 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                     configureOptions = false;
                 }
 
+                java.util.Map<String, VaultItem> allItems = VaultBandsProcessor.loadMergedItems(vaultPath);
+                boolean currentFilterTrash = filterTrash;
+                long allCount = allItems.values().stream()
+                        .filter(item -> !currentFilterTrash || !Boolean.TRUE.equals(item.getTrashed()))
+                        .count();
+                long archiveCount = allItems.values().stream()
+                        .filter(item -> Boolean.TRUE.equals(item.getTrashed()))
+                        .count();
+
                 System.out.println();
-                System.out.print("Enter search string (blank for all, /options to change options, /exit or /quit to exit): ");
+                System.out.println("Categories:");
+                for (String[] entry : categoryMenu) {
+                    String num = entry[0];
+                    String code = entry[1];
+                    String label = entry[2];
+                    long count;
+                    if ("ALL".equals(code)) {
+                        count = allCount;
+                    } else if ("ARCHIVE".equals(code)) {
+                        count = archiveCount;
+                    } else {
+                        count = allItems.values().stream()
+                                .filter(item -> !currentFilterTrash || !Boolean.TRUE.equals(item.getTrashed()))
+                                .filter(item -> code.equals(item.getCategoryCode()))
+                                .count();
+                    }
+                    String defaultSuffix = "0".equals(num) ? " [default]" : "";
+                    System.out.printf("  [%s] %s (%d)%s%n", num, label, count, defaultSuffix);
+                }
+
+                System.out.print("Select category [0-10, Enter for All items, /options, /exit]: ");
+                if (!searchScanner.hasNextLine()) {
+                    break;
+                }
+                String catInput = searchScanner.nextLine().trim();
+                if (catInput.equalsIgnoreCase("/exit") || catInput.equalsIgnoreCase("/quit")) {
+                    System.out.println("Exiting.");
+                    break;
+                }
+                if (catInput.equalsIgnoreCase("/options")) {
+                    configureOptions = true;
+                    continue;
+                }
+
+                String selectedCategoryCode = "ALL";
+                String selectedCategoryLabel = "All items";
+                if (!catInput.isEmpty()) {
+                    for (String[] entry : categoryMenu) {
+                        if (entry[0].equals(catInput)
+                                || entry[1].equalsIgnoreCase(catInput)
+                                || entry[2].equalsIgnoreCase(catInput)) {
+                            selectedCategoryCode = entry[1];
+                            selectedCategoryLabel = entry[2];
+                            break;
+                        }
+                    }
+                }
+
+                System.out.printf("Enter search string for %s (blank for all, /options, /exit or /quit): ", selectedCategoryLabel);
                 if (!searchScanner.hasNextLine()) {
                     break;
                 }
@@ -90,7 +161,7 @@ public class OnePasswordCliApplication implements CommandLineRunner {
                 }
 
                 //Process Bands
-                VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, showRawDecrypted, filterTrash);
+                VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, showRawDecrypted, filterTrash, selectedCategoryCode);
             }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());

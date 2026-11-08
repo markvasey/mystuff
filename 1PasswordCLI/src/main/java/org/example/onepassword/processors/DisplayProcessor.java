@@ -52,7 +52,7 @@ public class DisplayProcessor {
     }
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
-        DisplayResults(items, vaultMasterKey, vaultOverviewKey, Utils.parseSearchString(searchString), false, true);
+        DisplayResults(items, vaultMasterKey, vaultOverviewKey, Utils.parseSearchString(searchString), false, true, "ALL");
     }
 
     public static void DisplayResults(
@@ -62,11 +62,22 @@ public class DisplayProcessor {
             String searchString,
             boolean showRawDecrypted,
             boolean filterTrash) {
-        DisplayResults(items, vaultMasterKey, vaultOverviewKey, Utils.parseSearchString(searchString), showRawDecrypted, filterTrash);
+        DisplayResults(items, vaultMasterKey, vaultOverviewKey, Utils.parseSearchString(searchString), showRawDecrypted, filterTrash, "ALL");
+    }
+
+    public static void DisplayResults(
+            Map<String, VaultItem> items,
+            byte[] vaultMasterKey,
+            byte[] vaultOverviewKey,
+            String searchString,
+            boolean showRawDecrypted,
+            boolean filterTrash,
+            String categoryFilter) {
+        DisplayResults(items, vaultMasterKey, vaultOverviewKey, Utils.parseSearchString(searchString), showRawDecrypted, filterTrash, categoryFilter);
     }
 
     public static void DisplayResults(Map<String, VaultItem> items, byte[] vaultMasterKey, byte[] vaultOverviewKey, List<String> searchTerms) {
-        DisplayResults(items, vaultMasterKey, vaultOverviewKey, searchTerms, false, true);
+        DisplayResults(items, vaultMasterKey, vaultOverviewKey, searchTerms, false, true, "ALL");
     }
 
     public static void DisplayResults(
@@ -76,10 +87,37 @@ public class DisplayProcessor {
             List<String> searchTerms,
             boolean showRawDecrypted,
             boolean filterTrash) {
+        DisplayResults(items, vaultMasterKey, vaultOverviewKey, searchTerms, showRawDecrypted, filterTrash, "ALL");
+    }
+
+    public static void DisplayResults(
+            Map<String, VaultItem> items,
+            byte[] vaultMasterKey,
+            byte[] vaultOverviewKey,
+            List<String> searchTerms,
+            boolean showRawDecrypted,
+            boolean filterTrash,
+            String categoryFilter) {
+
+        boolean archiveOnly = "ARCHIVE".equalsIgnoreCase(categoryFilter);
+        boolean filterBySpecificCategory = categoryFilter != null
+                && !categoryFilter.isBlank()
+                && !"ALL".equalsIgnoreCase(categoryFilter)
+                && !archiveOnly;
 
         for (VaultItem item : items.values()) {
             try {
-                if (filterTrash && Boolean.TRUE.equals(item.getTrashed())) continue;
+                if (archiveOnly) {
+                    if (!Boolean.TRUE.equals(item.getTrashed())) continue;
+                } else {
+                    if (filterTrash && Boolean.TRUE.equals(item.getTrashed())) continue;
+                    if (filterBySpecificCategory) {
+                        if (!categoryFilter.equals(item.getCategoryCode())
+                                && !categoryFilter.equalsIgnoreCase(item.getCategory())) {
+                            continue;
+                        }
+                    }
+                }
                 if (item.getO() == null) continue;
 
                 // 1. Decrypt Overview

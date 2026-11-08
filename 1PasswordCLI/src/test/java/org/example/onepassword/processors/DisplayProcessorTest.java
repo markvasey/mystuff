@@ -186,6 +186,16 @@ class DisplayProcessorTest {
         DisplayProcessor.resetCounters();
         DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null, true, false);
         assertEquals(4, DisplayProcessor.getCountTitles());
+
+        // Filter by Credit Cards category ("002") -> 1 item
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null, false, true, "002");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+
+        // Filter by ARCHIVE -> 1 item (the trashed item)
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null, false, true, "ARCHIVE");
+        assertEquals(1, DisplayProcessor.getCountTitles());
     }
 
     private VaultItem createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {

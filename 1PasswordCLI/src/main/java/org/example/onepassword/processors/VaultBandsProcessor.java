@@ -20,7 +20,7 @@ public class VaultBandsProcessor {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static void ProcessVault(Path vaultPath, byte[] vaultMasterKey, byte[] vaultOverviewKey, String searchString) {
-        ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, false, true);
+        ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, false, true, "ALL");
     }
 
     public static void ProcessVault(
@@ -30,10 +30,33 @@ public class VaultBandsProcessor {
             String searchString,
             boolean showRawDecrypted,
             boolean filterTrash) {
+        ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, showRawDecrypted, filterTrash, "ALL");
+    }
+
+    public static void ProcessVault(
+            Path vaultPath,
+            byte[] vaultMasterKey,
+            byte[] vaultOverviewKey,
+            String searchString,
+            boolean showRawDecrypted,
+            boolean filterTrash,
+            String categoryFilter) {
         DisplayProcessor.resetCounters();
         List<String> searchTerms = Utils.parseSearchString(searchString);
         VaultFoldersProcessor.loadFolders(vaultPath, vaultOverviewKey);
 
+        Map<String, VaultItem> mergedItems = loadMergedItems(vaultPath);
+        if (!mergedItems.isEmpty()) {
+            DisplayProcessor.DisplayResults(mergedItems, vaultMasterKey, vaultOverviewKey, searchTerms, showRawDecrypted, filterTrash, categoryFilter);
+        }
+        DisplayProcessor.PrintTotals();
+    }
+
+    public static Map<String, VaultItem> loadMergedItems(Path vaultPath) {
+        Map<String, VaultItem> mergedItems = new LinkedHashMap<>();
+        if (vaultPath == null) {
+            return mergedItems;
+        }
         File defaultDir = vaultPath.resolve("default").toFile();
         File[] bandFiles = defaultDir.listFiles((_, name) -> name.startsWith("band_") && name.endsWith(".js"));
 
@@ -42,8 +65,6 @@ public class VaultBandsProcessor {
             Arrays.sort(bandFiles, Comparator
                     .comparing((File f) -> f.getName().contains("conflicted copy"))
                     .thenComparing(File::getName));
-
-            Map<String, VaultItem> mergedItems = new LinkedHashMap<>();
 
             for (File bandFile : bandFiles) {
                 boolean isConflicted = bandFile.getName().contains("conflicted copy");
@@ -80,11 +101,7 @@ public class VaultBandsProcessor {
                     }
                 }
             }
-
-            if (!mergedItems.isEmpty()) {
-                DisplayProcessor.DisplayResults(mergedItems, vaultMasterKey, vaultOverviewKey, searchTerms, showRawDecrypted, filterTrash);
-            }
         }
-        DisplayProcessor.PrintTotals();
+        return mergedItems;
     }
 }
