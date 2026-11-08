@@ -11,7 +11,7 @@
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javacv.version>1.5.11</javacv.version>
+        <javacv.version>1.5.14</javacv.version>
         <onvif.version>1.4.0</onvif.version>
         <jackson.version>2.23.0</jackson.version>
         <slf4j.version>2.0.20</slf4j.version>

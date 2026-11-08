@@ -11,7 +11,7 @@
     <properties>
         <maven.compiler.release>26</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javacv.version>1.5.11</javacv.version>
+        <javacv.version>1.5.14</javacv.version>
         <javacpp.platform>linux-x86_64</javacpp.platform>
         <onvif.version>1.4.0</onvif.version>
         <jackson.version>2.23.0</jackson.version>
@@ -28,45 +28,45 @@
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>javacpp</artifactId>
-            <version>1.5.11</version>
+            <version>1.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>javacpp</artifactId>
-            <version>1.5.11</version>
+            <version>1.5.14</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>ffmpeg</artifactId>
-            <version>7.1-1.5.11</version>
+            <version>8.1.2-1.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>ffmpeg</artifactId>
-            <version>7.1-1.5.11</version>
+            <version>8.1.2-1.5.14</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>opencv</artifactId>
-            <version>4.10.0-1.5.11</version>
+            <version>4.14.0-1.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>opencv</artifactId>
-            <version>4.10.0-1.5.11</version>
+            <version>4.14.0-1.5.14</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>openblas</artifactId>
-            <version>0.3.28-1.5.11</version>
+            <version>0.3.34-1.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>openblas</artifactId>
-            <version>0.3.28-1.5.11</version>
+            <version>0.3.34-1.5.14</version>
             <classifier>linux-x86_64</classifier>
         </dependency>
 
