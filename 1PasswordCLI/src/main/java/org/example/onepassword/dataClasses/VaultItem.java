@@ -1,7 +1,12 @@
 package org.example.onepassword.dataClasses;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.example.onepassword.utils.Utils;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class VaultItem {
@@ -11,6 +16,14 @@ public class VaultItem {
     private String d; // encrypted details
     private String k; // encrypted item key
     private String category;
+    private Long created;
+    private Long updated;
+    private Long tx;
+    private Boolean trashed;
+    private Integer fave;
+    private String folder;
+
+    private final Map<String, Object> additionalProperties = new LinkedHashMap<>();
 
     public String getUuid() {
         return uuid;
@@ -56,7 +69,69 @@ public class VaultItem {
         return Utils.getCategoryName(category);
     }
 
+    public String getCategoryCode() {
+        return category;
+    }
+
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public Long getCreated() {
+        return created;
+    }
+
+    public void setCreated(Long created) {
+        this.created = created;
+    }
+
+    public Long getUpdated() {
+        return updated;
+    }
+
+    public void setUpdated(Long updated) {
+        this.updated = updated;
+    }
+
+    public Long getTx() {
+        return tx;
+    }
+
+    public void setTx(Long tx) {
+        this.tx = tx;
+    }
+
+    public Boolean getTrashed() {
+        return trashed;
+    }
+
+    public void setTrashed(Boolean trashed) {
+        this.trashed = trashed;
+    }
+
+    public Integer getFave() {
+        return fave;
+    }
+
+    public void setFave(Integer fave) {
+        this.fave = fave;
+    }
+
+    public String getFolder() {
+        return folder;
+    }
+
+    public void setFolder(String folder) {
+        this.folder = folder;
+    }
+
+    @JsonAnyGetter
+    public Map<String, Object> getAdditionalProperties() {
+        return additionalProperties;
+    }
+
+    @JsonAnySetter
+    public void setAdditionalProperty(String name, Object value) {
+        additionalProperties.put(name, value);
     }
 }

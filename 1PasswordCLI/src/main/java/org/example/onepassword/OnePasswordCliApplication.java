@@ -37,14 +37,61 @@ public class OnePasswordCliApplication implements CommandLineRunner {
             //Derive Master Keys
             VaultKeysProcessor.UnlockKeys(password, profile);
             byte[] vaultMasterKey = VaultKeysProcessor.getVaultMasterKey();
-            byte[] vaultOverviewKey =  VaultKeysProcessor.getVaultOverviewKey();
+            byte[] vaultOverviewKey = VaultKeysProcessor.getVaultOverviewKey();
 
-            System.out.print("Enter search string (blank for all): ");
+            boolean showRawDecrypted = false;
+            boolean filterTrash = true;
             Scanner searchScanner = new Scanner(System.in);
-            String searchString = searchScanner.nextLine();
 
-            //Process Bands
-            VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString);
+            boolean configureOptions = true;
+            while (true) {
+                if (configureOptions) {
+                    while (true) {
+                        System.out.printf("Options: [1] Show raw decrypted: %s, [2] Filter Trash: %s%n",
+                                showRawDecrypted ? "Yes" : "No",
+                                filterTrash ? "Yes" : "No");
+                        System.out.print("Enter 1 or 2 to toggle options, or press Enter to search: ");
+                        if (!searchScanner.hasNextLine()) {
+                            return;
+                        }
+                        String optionInput = searchScanner.nextLine().trim();
+                        if (optionInput.isEmpty()) {
+                            break;
+                        }
+                        if (optionInput.equalsIgnoreCase("/exit") || optionInput.equalsIgnoreCase("/quit")) {
+                            System.out.println("Exiting.");
+                            return;
+                        }
+                        if (optionInput.contains("1")) {
+                            showRawDecrypted = !showRawDecrypted;
+                        }
+                        if (optionInput.contains("2")) {
+                            filterTrash = !filterTrash;
+                        }
+                    }
+                    configureOptions = false;
+                }
+
+                System.out.println();
+                System.out.print("Enter search string (blank for all, /options to change options, /exit or /quit to exit): ");
+                if (!searchScanner.hasNextLine()) {
+                    break;
+                }
+                String searchString = searchScanner.nextLine();
+                String trimmed = searchString.trim();
+
+                if (trimmed.equalsIgnoreCase("/exit") || trimmed.equalsIgnoreCase("/quit")) {
+                    System.out.println("Exiting.");
+                    break;
+                }
+                if (trimmed.equalsIgnoreCase("/options")) {
+                    configureOptions = true;
+                    continue;
+                }
+
+                //Process Bands
+                VaultBandsProcessor.ProcessVault(vaultPath, vaultMasterKey, vaultOverviewKey, searchString, showRawDecrypted, filterTrash);
+            }
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
         }

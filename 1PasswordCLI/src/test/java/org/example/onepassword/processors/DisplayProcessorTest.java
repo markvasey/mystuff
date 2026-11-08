@@ -108,6 +108,86 @@ class DisplayProcessorTest {
         assertEquals(2, DisplayProcessor.getCountFields());
     }
 
+    @Test
+    void testDisplayResultsSectionsAndAdditionalPropertiesAndDeepSearch() throws Exception {
+        Map<String, VaultItem> richItems = new HashMap<>();
+
+        String overviewJson = "{" +
+                "\"title\":\"UK Passport\"," +
+                "\"ainfo\":\"123456789\"," +
+                "\"tags\":[\"travel\",\"id\"]," +
+                "\"URLs\":[{\"l\":\"gov\",\"u\":\"https://gov.uk/passport\"}]" +
+                "}";
+        String detailsJson = "{" +
+                "\"sections\":[{" +
+                "  \"name\":\"details\"," +
+                "  \"title\":\"Passport Details\"," +
+                "  \"fields\":[" +
+                "    {\"k\":\"string\",\"n\":\"issuing_authority\",\"t\":\"Issuing Authority\",\"v\":\"HMPO\"}," +
+                "    {\"k\":\"date\",\"n\":\"expiry_date\",\"t\":\"Expiry Date\",\"v\":1893456000}," +
+                "    {\"k\":\"monthYear\",\"n\":\"valid_from\",\"t\":\"Valid From\",\"v\":202005}," +
+                "    {\"k\":\"address\",\"n\":\"addr\",\"t\":\"Address\",\"v\":{\"street\":\"10 Downing St\",\"city\":\"London\"}}" +
+                "  ]" +
+                "}]," +
+                "\"full_name\":\"Mark Vasey\"," +
+                "\"nationality\":\"British\"," +
+                "\"passwordHistory\":[{\"value\":\"old-secret\",\"time\":1700000000}]" +
+                "}";
+
+        VaultItem passportItem = new VaultItem();
+        passportItem.setUuid("UUID-PASSPORT");
+        passportItem.setCategory("106");
+        passportItem.setCreated(1700000000L);
+        passportItem.setUpdated(1750000000L);
+        passportItem.setFave(1);
+        passportItem.setO(Base64.getEncoder().encodeToString(encryptOpData(overviewJson, vaultOverviewKey)));
+
+        byte[] itemKeys = new byte[64];
+        Arrays.fill(itemKeys, (byte) 0x33);
+        passportItem.setK(Base64.getEncoder().encodeToString(encryptItemKey(itemKeys, vaultMasterKey)));
+        passportItem.setD(Base64.getEncoder().encodeToString(encryptOpData(detailsJson, itemKeys)));
+
+        richItems.put("UUID-PASSPORT", passportItem);
+
+        // Verify category 106 resolves to "Passport" (was previously null due to reversed map)
+        assertEquals("Passport", passportItem.getCategory());
+
+        // Search by section field value ("HMPO")
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(richItems, vaultMasterKey, vaultOverviewKey, "HMPO");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+        assertEquals(4, DisplayProcessor.getCountFields());
+
+        // Search by tag ("travel")
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(richItems, vaultMasterKey, vaultOverviewKey, "travel");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+
+        // Search by top-level additional property ("British")
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(richItems, vaultMasterKey, vaultOverviewKey, "British");
+        assertEquals(1, DisplayProcessor.getCountTitles());
+    }
+
+    @Test
+    void testFilterTrashAndShowRawDecryptedOptions() throws Exception {
+        VaultItem trashedItem = createMockItem("001", "Trashed Login", "https://old.example.com",
+                "{\"fields\":[{\"name\":\"username\",\"value\":\"olduser\"}]}",
+                vaultMasterKey, vaultOverviewKey);
+        trashedItem.setTrashed(true);
+        testItems.put("UUID-TRASHED", trashedItem);
+
+        // Default (filterTrash = true): trashed item is excluded (3 active items)
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null, false, true);
+        assertEquals(3, DisplayProcessor.getCountTitles());
+
+        // With filterTrash = false and showRawDecrypted = true: trashed item is included (4 items)
+        DisplayProcessor.resetCounters();
+        DisplayProcessor.DisplayResults(testItems, vaultMasterKey, vaultOverviewKey, (String) null, true, false);
+        assertEquals(4, DisplayProcessor.getCountTitles());
+    }
+
     private VaultItem createMockItem(String category, String title, String url, String detailsJson, byte[] vMasterKey, byte[] vOverviewKey) throws Exception {
         String overviewJson = "{\"title\":\"" + title + "\"" + (url != null ? ",\"url\":\"" + url + "\"" : "") + "}";
         String encryptedO = Base64.getEncoder().encodeToString(encryptOpData(overviewJson, vOverviewKey));
