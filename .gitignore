@@ -7,6 +7,7 @@ MyFinances/
 # Maven build artifacts
 target/
 *.class
+dependency-reduced-pom.xml
 
 # IDE files
 .idea/
